@@ -83,7 +83,7 @@ public class SystemReminderTest {
         Activity activity = instrumentation.startActivitySync(new Intent(context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         instrumentation.waitForIdleSync(); SystemClock.sleep(500);
         android.graphics.Bitmap image = instrumentation.getUiAutomation().takeScreenshot(); assertNotNull(image);
-        java.io.File directory = new java.io.File(context.getExternalFilesDir(null), "screenshots");
+        java.io.File directory = new java.io.File(context.getFilesDir(), "screenshots");
         assertTrue(directory.isDirectory() || directory.mkdirs());
         try (java.io.FileOutputStream output = new java.io.FileOutputStream(new java.io.File(directory, "dashboard.png"))) {
             assertTrue(image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output));
