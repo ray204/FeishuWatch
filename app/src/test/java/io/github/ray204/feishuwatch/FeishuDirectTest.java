@@ -74,6 +74,8 @@ public class FeishuDirectTest {
         assertThrows(IOException.class,client::begin); assertFalse(state.read().has("deviceCode"));
         begin(); now.addAndGet(5000); wire.add(200,"{\"access_token\":\"incomplete\",\"expires_in\":7200}");
         assertThrows(IOException.class,client::poll); assertFalse(state.read().has("accessToken"));
+        assertFalse(state.read().has("deviceCode"));
+        int attempts = wire.urls.size(); assertThrows(IOException.class,client::poll); assertEquals(attempts,wire.urls.size());
     }
     @Test public void refreshRotatesTokensBeforeCalendarReadAndSurvivesRestart() throws Exception {
         authorized(true); wire.add(200,tokens("new-access","new-refresh")); agendaReplies("[]"); JSONObject result=client.agenda();
@@ -108,5 +110,22 @@ public class FeishuDirectTest {
     @Test public void networkFailurePreservesPollThrottle() throws Exception {
         begin(); now.addAndGet(5000); wire.fail=true; assertThrows(IOException.class,client::poll);
         wire.fail=false; assertFalse(client.poll()); assertEquals(2,wire.urls.size()); assertTrue(state.read().has("deviceCode"));
+    }
+    @Test public void authorizationDiagnosticsRedactAppSecretAndDeviceCode() throws Exception {
+        begin(); now.addAndGet(5000);
+        wire.add(400,"{\"error\":\"invalid_grant\",\"error_description\":\"Rejected fixture+secret and fixture-device for ABCD-EFGH\"}");
+        assertThrows(IOException.class,client::poll);
+        assertEquals("invalid_grant",state.read().getString("lastAuthError"));
+        assertEquals("Rejected [redacted] and [redacted] for [redacted]",state.read().getString("lastAuthDetail"));
+    }
+    @Test public void wrappedOAuthSuccessIsAcceptedForLoginAndTokenRefresh() throws Exception {
+        begin(); now.addAndGet(5000);
+        wire.add(200,"{\"code\":0,\"data\":"+tokens("wrapped-access","wrapped-refresh")+"}");
+        assertTrue(client.poll()); assertEquals("wrapped-access",state.read().getString("accessToken"));
+        assertFalse(state.read().has("deviceCode"));
+        now.addAndGet(7200_000);
+        wire.add(200,"{\"code\":0,\"data\":"+tokens("rotated-access","rotated-refresh")+"}"); agendaReplies("[]");
+        client.agenda(); assertEquals("rotated-refresh",state.read().getString("refreshToken"));
+        assertEquals("Bearer rotated-access",wire.headers.get(3).get("Authorization"));
     }
 }

@@ -47,9 +47,9 @@
 
 ## v0.2 个人直连验证
 
-- 本地 Java 单元测试：17 项（原提醒策略 6 项 + 直连协议 11 项），已解析 XML，无失败/错误/跳过。
+- 本地 Java 单元测试：19 项（原提醒策略 6 项 + 直连协议 13 项），已解析 XML，无失败/错误/跳过。
 - 原服务端测试：14 项通过。直连模式不使用该服务，但保留旧模式回归。
-- 构建成功，lint 0 错误、19 条警告。Android 系统级测试新增两项凭证导入/加密/清除验证，最终结果以本版本 CI 为准。
+- 构建成功，lint 0 错误、20 条警告。Android 系统级测试新增两项凭证导入/加密/清除验证，最终结果以本版本 CI 为准。
 - 未取得真实应用凭证前，授权协议使用虚构响应验证；不声称真实飞书授权已成功。
 - 真机已有息屏提醒失败证据，见 DEVICE_TEST.md 与 Issue 1。该限制不由直连模式解决。
 
@@ -64,3 +64,7 @@
 | 日程实例、全天日期及取消过滤 | `normalizationPreservesInstancesAllDayDatesAndFiltersRemovedEvents` |
 | 本机密钥加密、临时文件删除及断开清除 | `directCredentialsAreEncryptedImportedOnceAndClearedOnDisconnect`（Android 系统测试） |
 | 错误配置不能覆盖既有凭证 | `malformedImportIsDeletedWithoutReplacingExistingCredentials`（Android 系统测试） |
+
+- 直连模式首轮 CI 通过：[41060200799](https://github.com/ray204/FeishuWatch/actions/runs/41060200799)，已解析 7 项 Android 系统测试，0 失败/错误/跳过。
+- 后续实测发现设备码被消费后仍重试会掩盖原始令牌解析错误，已增加成功响应信封兼容与停止重放：`wrappedOAuthSuccessIsAcceptedForLoginAndTokenRefresh`、`unsafeVerificationAddressAndIncompleteTokensAreRejected`。
+- 错误诊断脱敏：`authorizationDiagnosticsRedactAppSecretAndDeviceCode`。

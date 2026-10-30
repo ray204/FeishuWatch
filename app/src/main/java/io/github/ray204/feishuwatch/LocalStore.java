@@ -79,7 +79,20 @@ public final class LocalStore {
     public FeishuDirect directClient() {
         return new FeishuDirect(new FeishuDirect.State() {
             public JSONObject read() throws Exception { return directAuth(); }
-            public void save(JSONObject value) throws Exception { secret("directAuth", value.toString()); }
+            public void save(JSONObject value) throws Exception {
+                secret("directAuth", value.toString());
+                // Non-sensitive diagnostics only; tokens and app credentials remain encrypted.
+                prefs.edit().putString("directStatus", new JSONObject()
+                    .put("authorized", !value.optString("accessToken").isEmpty())
+                    .put("pairExpires", value.optLong("pairExpires"))
+                    .put("reauthorize", value.optBoolean("reauthorize"))
+                    .put("tokenEnvelope", value.optString("tokenEnvelope"))
+                    .put("tokenHasAccess", value.optBoolean("tokenHasAccess"))
+                    .put("tokenHasRefresh", value.optBoolean("tokenHasRefresh"))
+                    .put("tokenLifetime", value.optLong("tokenLifetime"))
+                    .put("lastAuthError", value.optString("lastAuthError"))
+                    .put("lastAuthDetail", value.optString("lastAuthDetail")).toString()).commit();
+            }
         });
     }
     public boolean connected() {

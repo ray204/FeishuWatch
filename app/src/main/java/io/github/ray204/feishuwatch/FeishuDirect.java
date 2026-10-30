@@ -75,15 +75,29 @@ public final class FeishuDirect {
                 interval = Math.min(60, interval + 5); s.put("interval", interval).put("nextPoll", now + interval * 1000L); state.save(s); return false;
             }
             if ("access_denied".equals(error) || "expired_token".equals(error) || "invalid_grant".equals(error)) {
-                clearPair(s); state.save(s); throw new IOException("授权已取消或过期，请重新扫码");
+                String detail = response.body.optString("error_description", response.body.optString("msg"));
+                for (String key : new String[]{"appSecret", "deviceCode", "accessToken", "refreshToken", "pairCode"}) {
+                    String value = s.optString(key); if (!value.isEmpty()) detail = detail.replace(value, "[redacted]");
+                }
+                clearPair(s); s.put("lastAuthError", error).put("lastAuthDetail", detail.substring(0, Math.min(300, detail.length()))); state.save(s);
+                throw new IOException("飞书设备授权失败（" + error + "），请重新扫码");
             }
-            check(response); applyTokens(s, response.body, now); clearPair(s); state.save(s); return true;
+            check(response);
+            // A successful response consumes the device code even if its payload is
+            // incomplete. Never poll that code again and obscure the original error.
+            try { applyTokens(s, response.body, now); }
+            finally { clearPair(s); state.save(s); }
+            return true;
         }
     }
     public void cancelPair() throws Exception { synchronized (LOCK) { JSONObject s = state.read(); clearPair(s); state.save(s); } }
     static void clearPair(JSONObject s) { for (String k : new String[]{"deviceCode", "pairUrl", "pairCode", "pairExpires", "nextPoll", "interval"}) s.remove(k); }
     private static void applyTokens(JSONObject s, JSONObject b, long now) throws Exception {
+        // Some Feishu gateways wrap the OAuth success in the standard code/data envelope.
+        s.put("tokenEnvelope", b.optJSONObject("data") != null ? "data" : "flat");
+        if (!b.has("access_token") && b.optJSONObject("data") != null) b = b.getJSONObject("data");
         String access = b.optString("access_token"), refresh = b.optString("refresh_token"); long expires = b.optLong("expires_in");
+        s.put("tokenHasAccess", !access.isEmpty()).put("tokenHasRefresh", !refresh.isEmpty()).put("tokenLifetime", expires);
         if (access.isEmpty() || refresh.isEmpty() || expires <= 0 || expires > 366L * 86400)
             throw new IOException("未获得完整授权，请开通 offline_access 后重新扫码");
         s.put("accessToken", access).put("refreshToken", refresh).put("expiresAt", now + expires * 1000).put("reauthorize", false);

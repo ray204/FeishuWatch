@@ -42,7 +42,9 @@ public final class MainActivity extends Activity {
         screenTitle = title;
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(0xFF0C1418);
-        content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(24));
+        content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        boolean round = getResources().getConfiguration().isScreenRound();
+        content.setPadding(dp(round ? 32 : 16), dp(round ? 40 : 16), dp(round ? 32 : 16), dp(round ? 48 : 24));
         scroll.addView(content); setContentView(scroll);
         label("腕上日程", 12, 0xFFB9F68B); label(title, 24, Color.WHITE);
     }
