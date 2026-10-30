@@ -4,7 +4,7 @@
 
 ## v0.2 个人直连修订（当前默认）
 
-用户选择把个人应用凭证保存在手表，且禁止电脑使用内网穿透。手机访问飞书设备授权页；手表通过 HTTPS 直接向飞书请求设备码、轮询授权、刷新令牌并读取主日历。无需自建域名或入站回调。
+个人直连模式将应用凭证加密保存在手表。手机访问飞书设备授权页；手表通过 HTTPS 直接向飞书请求设备码、轮询授权、刷新令牌并读取主日历。无需自建域名或入站回调。
 
 - 凭证运行时配置。Keystore AES-GCM 加密的单个 JSON bundle 原子保存应用密钥、设备授权会话、用户令牌和续期状态，禁用系统备份。USB 配置仅暂存在应用私有目录，导入后删除。输入页禁止截图和自动填充保存。
 - 设备授权参考[飞书官方 CLI](https://github.com/larksuite/cli/blob/main/internal/auth/device_flow.go)，使用 `accounts.feishu.cn/oauth/v1/device_authorization` 和 `open.feishu.cn/open-apis/authen/v2/oauth/token`。只接受飞书 HTTPS 授权链接。
