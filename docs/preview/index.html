@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>腕上日程 · 界面预览</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: light; font-family: Arial, "Noto Sans SC", "PingFang SC", sans-serif; }
+    body { margin: 0; background: #f1f4f0; color: #19251f; }
+    .sheet { max-width: 1600px; margin: auto; padding: 44px 28px 32px; }
+    .intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 34px; }
+    .brand { font-size: 14px; letter-spacing: 3px; color: #54695b; margin: 0 0 12px; }
+    h1 { margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -1px; }
+    .intro p { margin: 0 0 4px; font-size: 17px; line-height: 1.8; color: #607066; }
+    .screens { display: grid; grid-template-columns: repeat(3, 466px); justify-content: space-between; gap: 24px; }
+    figure { margin: 0; min-width: 0; }
+    .watch { width: 466px; height: 466px; overflow: hidden; border-radius: 50%; background: #0c1418; color: #f1f5f3; outline: 7px solid #25332e; box-shadow: 0 12px 26px #223d2320; }
+    .screen { height: 100%; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+    .screen::-webkit-scrollbar { display: none; }
+    .page { min-height: 100%; padding: 48px 56px 76px; }
+    .heading { font-size: 26px; font-weight: 700; line-height: 30px; padding-bottom: 18px; margin: 0; text-align: center; }
+    .glance { min-height: 370px; }
+    .card { background: #172321; border-radius: 28px; padding: 20px 22px; margin-bottom: 12px; cursor: pointer; }
+    .card:hover { background: #1c2c29; }
+    .card:focus-visible, button:focus-visible { outline: 3px solid #b9f68b; outline-offset: -3px; }
+    .card > * + * { margin-top: 10px; }
+    .muted { color: #99aba7; }
+    .accent { color: #b9f68b; }
+    .eyebrow { font-size: 20px; line-height: 24px; }
+    .time { font-size: 36px; line-height: 43px; white-space: nowrap; }
+    .title { font-size: 26px; line-height: 31px; font-weight: 700; }
+    .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .location { font-size: 20px; line-height: 24px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .compact .eyebrow { font-size: 22px; line-height: 26px; }
+    .compact .title { font-size: 24px; line-height: 29px; font-weight: 400; }
+    .hint { font-size: 18px; line-height: 23px; text-align: center; padding: 6px 0; margin: 0; }
+    .status { font-size: 18px; line-height: 23px; text-align: center; padding: 6px 0; margin: 0; }
+    button { width: 100%; min-height: 88px; border: 0; border-radius: 40px; margin-top: 10px; padding: 0 12px; background: #172321; color: #f1f5f3; font: inherit; font-size: 22px; cursor: pointer; }
+    button:hover { filter: brightness(1.15); }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+    .actions button { min-height: 80px; margin: 0; }
+    .primary { background: #b9f68b; color: #0c1418; }
+    .detail { margin: 0; font-size: 20px; line-height: 26px; padding: 6px 0; color: #99aba7; }
+    .detail-time { font-size: 34px; line-height: 41px; padding: 6px 0; }
+    .detail-title { font-size: 28px; line-height: 34px; padding: 6px 0; }
+    .people { font-size: 20px; line-height: 30px; color: #99aba7; padding: 6px 0; white-space: pre-line; }
+    .day { font-size: 20px; line-height: 26px; padding: 16px 8px 10px; color: #99aba7; }
+    .agenda .time { font-size: 24px; line-height: 29px; }
+    .agenda .title { font-size: 24px; line-height: 29px; font-weight: 400; }
+    figcaption { padding: 27px 9px 0; }
+    figcaption strong { font-size: 18px; font-weight: 600; }
+    figcaption p { color: #65756b; font-size: 14px; margin: 8px 0 0; line-height: 1.6; }
+    footer { margin-top: 30px; padding-top: 18px; border-top: 1px solid #d5ded5; font-size: 13px; color: #718076; }
+    @media (max-width: 1480px) { .screens { grid-template-columns: repeat(2, 466px); justify-content: center; gap: 38px; } }
+    @media (max-width: 1020px) { .screens { grid-template-columns: 466px; } .intro { display: block; } .intro p { margin-top: 16px; } }
+    @media (max-width: 560px) { .sheet { padding: 32px 16px; } .screens { grid-template-columns: 100%; } .watch { zoom: .72; margin: auto; } h1 { font-size: 30px; } figcaption { text-align: center; } }
+  </style>
+</head>
+<body>
+  <main class="sheet" id="export">
+    <header class="intro">
+      <div><p class="brand">FEISHUWATCH / 腕上日程</p><h1>日程，一眼就好。</h1></div>
+      <p>首屏只看日程 · 点开查看参会人<br>默认仅查看，需要时再开启提醒</p>
+    </header>
+    <div class="screens">
+      <figure><div class="watch" id="home-image"><div class="screen" id="interactive-screen" aria-label="可交互的手表预览"></div></div><figcaption><strong>01 / 日程首页</strong><p>时间、主题和下一场。操作入口在首屏下方。</p></figcaption></figure>
+      <figure><div class="watch" id="detail-image"><div class="screen"><div class="page" id="detail-preview"></div></div></div><figcaption><strong>02 / 日程详情</strong><p>阅读完整日程。参会人用小字展示，最多 10 位。</p></figcaption></figure>
+      <figure><div class="watch" id="settings-image"><div class="screen"><div class="page" id="settings-preview"></div></div></div><figcaption><strong>03 / 仅查看模式</strong><p>关闭通知与震动，保留连接、日程和自动同步。</p></figcaption></figure>
+    </div>
+    <footer>v0.2.1 界面 HTML 重现 · 按 466 × 466 圆屏、density 320 布局 · 全部为虚构日程和姓名，并非真实日程截图。左侧可点击、滚动体验。</footer>
+  </main>
+  <script>
+    // All preview content is fictional. No network, credential, or calendar API calls.
+    const heading = text => `<h2 class="heading">${text}</h2>`;
+    const names = ['示例成员甲', '示例成员乙', '示例成员丙 · 组织者', '示例成员丁', '示例成员戊'];
+    const detail = () => `${heading('日程详情')}<p class="detail">今天</p><div class="detail-time accent">15:00 – 16:00</div><div class="detail-title">周末出行计划 · 示例</div><div class="people">参会人\n${names.join('\n')}</div><button data-action="home">返回</button>`;
+    let reminders = false;
+    const settings = () => `${heading('提醒与组件')}<button data-action="toggle">日程提醒 · ${reminders ? '已开启' : '已关闭'}</button><p class="detail">${reminders ? '预览开关，不会发送通知或震动。' : '仅查看日程，不通知、不震动。<br>日程仍会自动同步。'}</p><p class="detail">当前系统暂不支持添加标准组件。</p><button data-action="disconnect">断开飞书连接</button><button data-action="home">返回</button>`;
+    const home = () => `${heading('接下来')}<div class="glance"><div class="card" role="button" tabindex="0" data-action="detail"><div class="eyebrow muted">今天 · 下一场</div><div class="time accent">15:00 – 16:00</div><div class="title clamp">周末出行计划 · 示例</div></div><div class="card compact" role="button" tabindex="0" data-action="later"><div class="eyebrow accent">明天 · 10:00</div><div class="title clamp">读书分享 · 示例</div></div><p class="hint muted">向下滑动 · 更多操作</p></div><p class="status muted">14:30 已同步 · ${reminders ? '提前 10 分钟' : '仅查看'}</p><div class="actions"><button class="primary" data-action="agenda">日程列表</button><button data-action="settings">设置</button></div><button data-action="sync">立即同步</button>`;
+    const agenda = () => `${heading('未来日程')}<div class="day">今天</div><div class="card agenda" role="button" tabindex="0" data-action="detail"><div class="time accent">15:00 – 16:00</div><div class="title">周末出行计划 · 示例</div></div><div class="day">明天</div><div class="card agenda" role="button" tabindex="0" data-action="later"><div class="time accent">10:00 – 11:00</div><div class="title">读书分享 · 示例</div></div><button data-action="home">返回</button>`;
+    const screen = document.querySelector('#interactive-screen');
+    function show(page) { screen.innerHTML = `<div class="page">${page()}</div>`; screen.scrollTop = 0; }
+    function act(action) {
+      if (action === 'home') show(home);
+      if (action === 'detail') show(detail);
+      if (action === 'later') show(() => detail().replace('今天', '明天').replace('15:00 – 16:00', '10:00 – 11:00').replace('周末出行计划', '读书分享'));
+      if (action === 'agenda') show(agenda);
+      if (action === 'settings') show(settings);
+      if (action === 'toggle') { reminders = !reminders; show(settings); }
+      if (action === 'sync') { show(home); }
+      if (action === 'disconnect') alert('这是虚构数据预览，没有连接任何飞书账号。');
+    }
+    screen.addEventListener('click', e => { const target = e.target.closest('[data-action]'); if (target) act(target.dataset.action); });
+    screen.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"]')) { e.preventDefault(); act(e.target.dataset.action); } });
+    document.querySelector('#detail-preview').innerHTML = detail();
+    document.querySelector('#settings-preview').innerHTML = settings();
+    show(home);
+  </script>
+</body>
+</html>

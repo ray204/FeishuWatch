@@ -7,8 +7,8 @@ android {
         applicationId 'io.github.ray204.feishuwatch'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.2.1'
+        versionCode 4
+        versionName '0.2.2'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         buildConfigField 'String', 'DEFAULT_SERVER_URL', '"' + (project.findProperty('serverUrl') ?: '').replace('\\', '\\\\').replace('"', '\\"') + '"'
     }
@@ -16,6 +16,16 @@ android {
     compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
     lint { abortOnError true }
 }
+def legalAssetsDir = layout.buildDirectory.dir('generated/legalAssets')
+tasks.register('syncLegalAssets', Sync) {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE.txt' } }
+    from(rootProject.file('COPYRIGHT.md'))
+    from(rootProject.file('THIRD_PARTY_NOTICES.md'))
+    from(rootProject.file('docs/licenses')) { into 'licenses' }
+    into legalAssetsDir
+}
+android.sourceSets.main.assets.srcDir(legalAssetsDir)
+tasks.named('preBuild').configure { dependsOn('syncLegalAssets') }
 dependencies {
     implementation 'com.google.zxing:core:3.5.3'
     testImplementation 'junit:junit:4.13.2'
