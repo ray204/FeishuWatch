@@ -92,9 +92,12 @@
 | 参会人读取自动续期及权限不足保留连接 | `attendeeReadRefreshesCredentialsAndPermissionDenialKeepsConnection` |
 | 授权失效不重放 | `attendeeRevokedTokenRequiresReauthorizationWithoutReplayingRefresh` |
 | 普通重复实例与例外使用各自名单 | `ordinaryOccurrencesUseSeriesAttendeesButExceptionsKeepTheirOwnList` |
-| 首屏不显示操作按钮，下滑可操作 | `dashboardActionsStayBelowFirstScreenAndRemainReachableByScrolling`（等待本提交 CI 执行） |
+| 首屏不显示操作按钮，下滑可操作 | `dashboardActionsStayBelowFirstScreenAndRemainReachableByScrolling`（API30 CI 已通过） |
 
 
 v0.2.1 新增「日程提醒」总开关，默认关闭（仅查看）。关闭时取消应用的日程闹钟、测试闹钟、稍后提醒和常驻摘要，不清除授权、日程缓存或同步任务。真机升级后确认开关为关闭、9 条日程仍同步，AlarmManager 无本应用待触发闹钟。
 
 - 验证用例：`viewOnlyModeClearsNotificationsAndKeepsCalendarAndCredentials`（默认关闭、清除通知、旧提醒不再触发、日程与凭证保留）。
+
+
+v0.2.1 完整检查：本地 JVM 24 项、旧模式服务回归 14 项通过；构建成功，lint 0 错误、21 条警告。API30 模拟器 9 项通过（0 失败、错误或跳过），包含首屏操作区和仅查看模式验证，报告 XML 已解析：[CI 41066560799](https://github.com/ray204/FeishuWatch/actions/runs/41066560799)。此前两次运行的稍后提醒测试在等待系统完成回调时超时；后续将等待条件改为真实持久化结果，保留五分钟时间范围与通知清除断言，最终修订提交 `19c31d9` 的 [CI 41067074195](https://github.com/ray204/FeishuWatch/actions/runs/41067074195) 全部通过，API30 的 9 项结果 XML 再次确认无失败、错误或跳过。合计 47 项自动化测试通过。
