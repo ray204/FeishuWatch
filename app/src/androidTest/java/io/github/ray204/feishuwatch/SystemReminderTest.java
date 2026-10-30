@@ -96,6 +96,36 @@ public class SystemReminderTest {
         try { store.importDirectConfig(context); fail("Invalid config must fail"); } catch (java.io.IOException expected) { }
         assertFalse(file.exists()); assertEquals("original-fixture-secret",store.directAuth().getString("appSecret"));
     }
+    private android.widget.TextView textView(android.view.View view, String text) {
+        if (view instanceof android.widget.TextView && text.contentEquals(((android.widget.TextView) view).getText())) return (android.widget.TextView) view;
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) { android.widget.TextView found = textView(group.getChildAt(i), text); if (found != null) return found; }
+        }
+        return null;
+    }
+    @Test public void dashboardActionsStayBelowFirstScreenAndRemainReachableByScrolling() throws Exception {
+        store.snapshot(snapshot(System.currentTimeMillis() + 660000)); store.prefs.edit().putBoolean("demo", true).commit();
+        Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        Activity activity = instrumentation.startActivitySync(new Intent(context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        instrumentation.waitForIdleSync();
+        instrumentation.runOnMainSync(() -> {
+            android.view.ViewGroup root = activity.findViewById(android.R.id.content);
+            android.widget.TextView agenda = textView(root, "日程列表"), settings = textView(root, "设置");
+            assertNotNull(agenda); assertNotNull(settings);
+            assertFalse(agenda.getGlobalVisibleRect(new android.graphics.Rect())); assertFalse(settings.getGlobalVisibleRect(new android.graphics.Rect()));
+            assertTrue(textView(root, "集成测试日程").getGlobalVisibleRect(new android.graphics.Rect()));
+            android.widget.ScrollView scroll = (android.widget.ScrollView) root.getChildAt(0);
+            scroll.scrollTo(0, scroll.getChildAt(0).getHeight());
+        });
+        instrumentation.waitForIdleSync();
+        instrumentation.runOnMainSync(() -> {
+            android.view.ViewGroup root = activity.findViewById(android.R.id.content);
+            android.widget.TextView agenda = textView(root, "日程列表");
+            assertTrue(agenda.getGlobalVisibleRect(new android.graphics.Rect())); agenda.performClick();
+            assertNotNull(textView(activity.findViewById(android.R.id.content), "未来日程")); activity.finish();
+        });
+    }
     @Test public void watchSizedDashboardRendersWithFixtureData() throws Exception {
         store.snapshot(snapshot(System.currentTimeMillis() + 660000)); store.prefs.edit().putBoolean("demo", true).commit();
         Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();

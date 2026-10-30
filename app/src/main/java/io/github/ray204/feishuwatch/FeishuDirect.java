@@ -102,19 +102,23 @@ public final class FeishuDirect {
             throw new IOException("未获得完整授权，请开通 offline_access 后重新扫码");
         s.put("accessToken", access).put("refreshToken", refresh).put("expiresAt", now + expires * 1000).put("reauthorize", false);
     }
+    private JSONObject readyState() throws Exception {
+        JSONObject s = state.read(); long now = clock.getAsLong();
+        if (s.optBoolean("reauthorize") || s.optString("accessToken").isEmpty()) throw new Reauthorize();
+        if (s.optLong("expiresAt") <= now + 60_000) {
+            // A lost response can consume a rotating refresh token; don't replay it after a crash.
+            s.put("reauthorize", true); state.save(s);
+            try {
+                Response r = transport.request(OPEN + "/authen/v2/oauth/token", "POST", formHeaders(),
+                form("grant_type", "refresh_token", "client_id", s.getString("appId"), "client_secret", s.getString("appSecret"), "refresh_token", s.getString("refreshToken")));
+                check(r); applyTokens(s, r.body, now); state.save(s);
+            } catch (Exception e) { throw new Reauthorize(); }
+        }
+        return s;
+    }
     public JSONObject agenda() throws Exception {
         synchronized (LOCK) {
-            JSONObject s = state.read(); long now = clock.getAsLong();
-            if (s.optBoolean("reauthorize") || s.optString("accessToken").isEmpty()) throw new Reauthorize();
-            if (s.optLong("expiresAt") <= now + 60_000) {
-                // A lost response can consume a rotating refresh token; don't replay it after a crash.
-                s.put("reauthorize", true); state.save(s);
-                try {
-                    Response r = transport.request(OPEN + "/authen/v2/oauth/token", "POST", formHeaders(),
-                        form("grant_type", "refresh_token", "client_id", s.getString("appId"), "client_secret", s.getString("appSecret"), "refresh_token", s.getString("refreshToken")));
-                    check(r); applyTokens(s, r.body, now); state.save(s);
-                } catch (Exception e) { throw new Reauthorize(); }
-            }
+            JSONObject s = readyState(); long now = clock.getAsLong();
             Map<String,String> headers = new HashMap<>(); headers.put("Authorization", "Bearer " + s.getString("accessToken")); headers.put("Content-Type", "application/json");
             try {
                 Response primary = transport.request(OPEN + "/calendar/v4/calendars/primary", "POST", headers, "{}"); check(primary);
@@ -128,6 +132,64 @@ public final class FeishuDirect {
             catch (JSONException e) { throw new IOException("日历响应不完整，保留已有日程"); }
         }
     }
+    /** Read people only when opening details; never delay the calendar snapshot. */
+    public JSONObject attendees(String eventId) throws Exception {
+        synchronized (LOCK) {
+            if (eventId == null || eventId.isEmpty()) throw new IOException("无法识别这条日程");
+            JSONObject s = readyState();
+            Map<String,String> headers = new HashMap<>();
+            headers.put("Authorization", "Bearer " + s.getString("accessToken")); headers.put("Content-Type", "application/json");
+            try {
+                Response primary = transport.request(OPEN + "/calendar/v4/calendars/primary", "POST", headers, "{}"); check(primary);
+                String calendar = primary.body.getJSONObject("data").getJSONArray("calendars").getJSONObject(0).getJSONObject("calendar").getString("calendar_id");
+                String url = OPEN + "/calendar/v4/calendars/" + encode(calendar) + "/events/" + encode(eventId) + "/attendees";
+                LinkedHashMap<String,String> people = new LinkedHashMap<>(); boolean partial = false, more = false;
+                String page = ""; Set<String> pages = new HashSet<>(); int remaining = 10;
+                do {
+                    if (--remaining < 0 || !pages.add(page)) { more = true; break; }
+                    Response r = transport.request(url + "?user_id_type=open_id&page_size=10" + (page.isEmpty() ? "" : "&page_token=" + encode(page)), "GET", headers, null);
+                    if (r.body.optInt("code") == 194001) throw new IOException("此日程未开放参会人名单");
+                    check(r);
+                    JSONObject data = r.body.getJSONObject("data"); JSONArray items = data.getJSONArray("items");
+                    for (int i = 0; i < items.length(); i++) {
+                        JSONObject person = items.getJSONObject(i);
+                        if ("removed".equals(person.optString("rsvp_status")) || "resource".equals(person.optString("type"))) continue;
+                        if ("chat".equals(person.optString("type"))) {
+                            String groupPage = ""; Set<String> groupPages = new HashSet<>();
+                            try {
+                                do {
+                                    if (--remaining < 0 || !groupPages.add(groupPage)) { partial = true; break; }
+                                    Response group = transport.request(url + "/" + encode(person.getString("attendee_id")) + "/chat_members?user_id_type=open_id&page_size=10" + (groupPage.isEmpty() ? "" : "&page_token=" + encode(groupPage)), "GET", headers, null); check(group);
+                                    JSONObject gd = group.body.getJSONObject("data"); JSONArray members = gd.getJSONArray("items");
+                                    for (int j = 0; j < members.length(); j++) addPerson(people, members.getJSONObject(j));
+                                    if (!gd.optBoolean("has_more")) break;
+                                    groupPage = gd.optString("page_token");
+                                    if (groupPage.isEmpty()) { partial = true; break; }
+                                    if (people.size() >= 10) { more = true; break; }
+                                } while (true);
+                            } catch (Reauthorize e) { throw e; }
+                            catch (IOException | JSONException e) { partial = true; }
+                        } else addPerson(people, person);
+                        if (people.size() > 10) break;
+                    }
+                    if (!data.optBoolean("has_more")) break;
+                    page = data.optString("page_token");
+                    if (people.size() >= 10 || page.isEmpty()) { more = true; break; }
+                } while (true);
+                JSONArray names = new JSONArray();
+                for (String name : people.values()) { if (names.length() == 10) break; names.put(name); }
+                return new JSONObject().put("names", names).put("hasMore", more || people.size() > 10).put("partial", partial);
+            } catch (Reauthorize e) { s.put("reauthorize", true); state.save(s); throw e; }
+            catch (JSONException e) { throw new IOException("参会人信息暂时不可用"); }
+        }
+    }
+    private static void addPerson(Map<String,String> people, JSONObject person) {
+        if ("removed".equals(person.optString("rsvp_status"))) return;
+        String name = person.optString("display_name").trim();
+        if (name.isEmpty()) name = "未公开姓名";
+        String id = person.optString("user_id", person.optString("open_id", person.optString("attendee_id", person.optString("third_party_email", name))));
+        people.putIfAbsent(id, name.substring(0, Math.min(100, name.length())) + (person.optBoolean("is_organizer") ? " · 组织者" : ""));
+    }
     static JSONArray normalize(JSONArray items) throws Exception {
         Map<String,JSONObject> unique = new LinkedHashMap<>();
         for (int i = 0; i < items.length(); i++) {
@@ -140,7 +202,12 @@ public final class FeishuDirect {
             if (id.isEmpty() || (!allDay && endMs <= startMs)) throw new IOException("日程格式异常，保留已有日程");
             String title = e.optString("summary", "未命名日程"); if (title.isEmpty()) title = "未命名日程";
             JSONObject location = e.optJSONObject("location"); String place = location == null ? "" : location.optString("name");
-            unique.put(id, new JSONObject().put("id", id).put("title", title.substring(0, Math.min(500,title.length())))
+            // Ordinary occurrences inherit the series' people. Exceptions must keep
+            // their own ID because their attendee list may differ from the series.
+            String attendeeId = id;
+            if (e.has("is_exception") && !e.optBoolean("is_exception") && id.matches("[0-9a-fA-F-]{36}_[1-9][0-9]*"))
+                attendeeId = id.substring(0, id.lastIndexOf('_')) + "_0";
+            unique.put(id, new JSONObject().put("id", id).put("attendeeEventId", attendeeId).put("title", title.substring(0, Math.min(500,title.length())))
                 .put("location", place.substring(0, Math.min(500,place.length()))).put("startMs", startMs).put("endMs", endMs).put("allDay", allDay)
                 .put("startDate", start.optString("date")).put("endDate", end.optString("date")));
         }

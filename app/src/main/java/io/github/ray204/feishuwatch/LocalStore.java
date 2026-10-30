@@ -35,7 +35,7 @@ public final class LocalStore {
         List<Event> list = new ArrayList<>();
         for (int i = 0; i < array.length(); i++) {
             JSONObject e = array.getJSONObject(i);
-            Event event = new Event(e.getString("id"), e.getString("title"), e.optString("location"), e.getLong("startMs"), e.getLong("endMs"), e.getBoolean("allDay"), e.optString("startDate"), e.optString("endDate"));
+            Event event = new Event(e.getString("id"), e.getString("title"), e.optString("location"), e.getLong("startMs"), e.getLong("endMs"), e.getBoolean("allDay"), e.optString("startDate"), e.optString("endDate"), e.optString("attendeeEventId", e.getString("id")));
             if (event.id.isEmpty() || (!event.allDay && event.endMs <= event.startMs)) throw new JSONException("Invalid event");
             list.add(event);
         }

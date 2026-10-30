@@ -42,7 +42,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。安装方式：`adb install 
 ./gradlew assembleDebug -PserverUrl=https://watch.example.com
 ```
 
-个人直连首次配置见 [SETUP](docs/SETUP.md)。测试不使用真实日程或真实用户凭证。`server/` 和 `deploy/` 仅供可选的旧版服务模式使用。
+个人直连首次配置见 [SETUP](docs/SETUP.md)。自动化测试使用虚构数据；个人直连已通过真机扫码、主日历同步和 App 冷启动保留登录验证。`server/` 和 `deploy/` 仅供可选的旧版服务模式使用。
 
 ## 当前边界
 

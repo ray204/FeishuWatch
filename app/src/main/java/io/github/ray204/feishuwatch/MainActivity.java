@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
+import android.text.TextUtils;
 import android.view.*;
 import android.widget.*;
 import com.google.zxing.*;
@@ -24,6 +25,8 @@ public final class MainActivity extends Activity {
     private boolean active, busy, pairing;
     private String screenTitle = "";
     private TextView pairingStatus;
+    private final Map<String, JSONObject> attendeeCache = new HashMap<>();
+    private static final int INK = 0xFFF1F5F3, MUTED = 0xFF99ABA7, ACCENT = 0xFFB9F68B, PANEL = 0xFF172321;
     private final SharedPreferences.OnSharedPreferenceChangeListener changes = (preferences, key) -> {
         if (active && "接下来".equals(screenTitle) && ("events".equals(key) || "error".equals(key))) handler.post(this::render);
     };
@@ -44,20 +47,60 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(0xFF0C1418);
         content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         boolean round = getResources().getConfiguration().isScreenRound();
-        content.setPadding(dp(round ? 32 : 16), dp(round ? 40 : 16), dp(round ? 32 : 16), dp(round ? 48 : 24));
+        content.setPadding(dp(round ? 28 : 16), dp(round ? 24 : 14), dp(round ? 28 : 16), dp(round ? 38 : 24));
         scroll.addView(content); setContentView(scroll);
-        label("腕上日程", 12, 0xFFB9F68B); label(title, 24, Color.WHITE);
+        TextView heading = label(title, 13, INK); heading.setGravity(Gravity.CENTER);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD); heading.setPadding(0, 0, 0, dp(9));
     }
     private TextView label(String text, int size, int color) {
-        TextView view = new TextView(this); view.setText(text); view.setTextSize(size); view.setTextColor(color);
-        view.setPadding(0, dp(5), 0, dp(5)); content.addView(view); return view;
+        TextView view = text(text, size, color);
+        view.setPadding(0, dp(3), 0, dp(3)); content.addView(view); return view;
     }
-    private void detail(String text) { label(text, 13, 0xFF9DB1B7); }
+    private TextView text(String value, int size, int color) {
+        TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color);
+        view.setIncludeFontPadding(false); view.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE); return view;
+    }
+    private void limit(TextView view, int lines) { view.setMaxLines(lines); view.setEllipsize(TextUtils.TruncateAt.END); }
+    private GradientDrawable surface(int color, int radius) {
+        GradientDrawable shape = new GradientDrawable(); shape.setColor(color); shape.setCornerRadius(dp(radius)); return shape;
+    }
+    private LinearLayout card() {
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(11), dp(10), dp(11), dp(10)); box.setBackground(surface(PANEL, 14));
+        box.setForeground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF), null, surface(Color.WHITE, 14)));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2); lp.bottomMargin = dp(6); content.addView(box, lp); return box;
+    }
+    private TextView cardText(LinearLayout box, String value, int size, int color, int lines) {
+        TextView view = text(value, size, color); if (lines > 0) limit(view, lines);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2); lp.topMargin = box.getChildCount() == 0 ? 0 : dp(5);
+        box.addView(view, lp); return view;
+    }
+    private void detail(String text) { label(text, 10, MUTED); }
+    private Button action(String title, Runnable action) {
+        Button button = new Button(this); button.setText(title); button.setAllCaps(false); button.setTextSize(11); button.setTextColor(INK);
+        button.setMinWidth(0); button.setMinimumWidth(0); button.setMinHeight(0); button.setMinimumHeight(0);
+        button.setPadding(dp(6), 0, dp(6), 0); button.setStateListAnimator(null);
+        button.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF), surface(PANEL, 20), null));
+        button.setOnClickListener(v -> { if (!busy) action.run(); }); return button;
+    }
     private void button(String title, Runnable action) {
-        Button button = new Button(this); button.setText(title); button.setAllCaps(false); button.setTextSize(14); button.setTextColor(0xFF0C1418);
-        GradientDrawable background = new GradientDrawable(); background.setColor(0xFFB9F68B); background.setCornerRadius(dp(20)); button.setBackground(background);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48)); lp.topMargin = dp(9); content.addView(button, lp);
-        button.setOnClickListener(v -> { if (!busy) action.run(); });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(44)); lp.topMargin = dp(5); content.addView(action(title, action), lp);
+    }
+    private void navigation() {
+        LinearLayout row = new LinearLayout(this);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(40)); lp.topMargin = dp(4); content.addView(row, lp);
+        Button agenda = action("日程列表", this::agenda); agenda.setTextColor(0xFF0C1418);
+        agenda.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33000000), surface(ACCENT, 22), null));
+        LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, -1, 1); left.rightMargin = dp(6); row.addView(agenda, left);
+        row.addView(action("设置", this::settings), new LinearLayout.LayoutParams(0, -1, 1));
+    }
+    private String dateLabel(long when) {
+        String day = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(new Date(when));
+        Calendar today = Calendar.getInstance();
+        if (day.equals(new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(today.getTime()))) return "今天";
+        today.add(Calendar.DATE, 1);
+        if (day.equals(new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(today.getTime()))) return "明天";
+        return new SimpleDateFormat("M月d日 E", Locale.getDefault()).format(new Date(when));
     }
     private void render() {
         if (!active) return;
@@ -65,22 +108,37 @@ public final class MainActivity extends Activity {
         if (!store.connected() && pairData().optLong("pairExpires") > System.currentTimeMillis()) { showPair(); return; }
         if (!store.connected() && !store.prefs.getBoolean("demo", false)) { onboarding(); return; }
         base("接下来");
+        LinearLayout page = content, glance = new LinearLayout(this); glance.setOrientation(LinearLayout.VERTICAL);
+        // Reserve one complete viewport for agenda content; actions start below it.
+        glance.setMinimumHeight(Math.max(dp(160), getResources().getDisplayMetrics().heightPixels - dp(getResources().getConfiguration().isScreenRound() ? 48 : 38)));
+        page.addView(glance, new LinearLayout.LayoutParams(-1, -2)); content = glance;
         long now = System.currentTimeMillis(); Event next = ReminderPolicy.upcoming(store.events(), now);
         if (store.prefs.getBoolean("demo", false)) detail("示例模式 · 非真实日程");
         if (next != null) {
-            String time = new SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(new Date(next.startMs));
-            label((next.startMs <= now ? "进行中 · " : "") + time, 22, 0xFFB9F68B);
-            TextView title = label(next.title, 20, Color.WHITE); title.setBackgroundResource(R.drawable.card_bg);
-            if (!next.location.isEmpty()) detail(next.location);
-        } else label("暂无待办日程", 18, Color.WHITE);
+            LinearLayout box = card();
+            cardText(box, dateLabel(next.startMs) + (next.startMs <= now ? " · 进行中" : " · 下一场"), 10, MUTED, 1);
+            cardText(box, new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(next.startMs)) + " – " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(next.endMs)), 18, ACCENT, 1);
+            cardText(box, next.title, 13, INK, 2).setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            if (!next.location.isEmpty()) cardText(box, next.location, 10, MUTED, 1);
+            box.setOnClickListener(v -> eventDetails(next, this::render));
+            box.setContentDescription("查看日程详情：" + next.title);
+        } else { LinearLayout box = card(); cardText(box, "暂无待办日程", 14, INK, 1); cardText(box, "空闲时光，轻松安排", 10, MUTED, 1); }
+        if (next != null) for (Event later : store.events()) {
+            if (later.allDay || later.startMs <= next.startMs || later.endMs <= now) continue;
+            LinearLayout box = card();
+            cardText(box, dateLabel(later.startMs) + " · " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(later.startMs)), 11, ACCENT, 1);
+            cardText(box, later.title, 12, INK, 2); box.setOnClickListener(v -> eventDetails(later, this::render));
+            box.setContentDescription("查看日程详情：" + later.title); break;
+        }
+        TextView hint = label("向下滑动 · 更多操作", 9, MUTED); hint.setGravity(Gravity.CENTER);
+        content = page;
         if (store.syncedAt() == 0) detail("正在等待首次同步");
         else if (now >= store.validUntil()) detail("缓存已过期 · 提醒已暂停");
-        else detail("提前 " + store.minutes() + " 分钟提醒 · " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(store.syncedAt())) + " 已同步");
+        else { TextView status = label(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(store.syncedAt())) + " 已同步 · 提前 " + store.minutes() + " 分钟", 9, MUTED); status.setGravity(Gravity.CENTER); }
         if (!store.error().isEmpty()) detail(store.error());
         if (store.direct() && pairData().optBoolean("reauthorize")) button("重新扫码授权", () -> work(() -> store.directClient().begin(), this::showPair));
+        navigation();
         button("立即同步", () -> work(() -> SyncJob.sync(this), this::render));
-        button("提醒与组件", this::settings);
-        button("未来日程", this::agenda);
     }
     private JSONObject pairData() {
         try {
@@ -147,13 +205,13 @@ public final class MainActivity extends Activity {
         try {
             JSONObject pair = pairData();
             String url = pair.optString("pairUrl");
-            int pixels = dp(160);
+            int pixels = dp(132);
             BitMatrix matrix = new MultiFormatWriter().encode(url, BarcodeFormat.QR_CODE, pixels, pixels);
             Bitmap bitmap = Bitmap.createBitmap(pixels, pixels, Bitmap.Config.ARGB_8888);
             for (int y = 0; y < pixels; y++) for (int x = 0; x < pixels; x++) bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
             ImageView image = new ImageView(this); image.setImageBitmap(bitmap); image.setContentDescription("飞书连接二维码"); image.setAdjustViewBounds(true);
-            content.addView(image, new LinearLayout.LayoutParams(-1, dp(160)));
-            label("连接码 " + pair.optString("pairCode"), 17, 0xFFB9F68B);
+            content.addView(image, new LinearLayout.LayoutParams(-1, dp(132)));
+            TextView code = label("连接码 " + pair.optString("pairCode"), 11, ACCENT); code.setGravity(Gravity.CENTER);
             detail("用手机飞书扫码，核对连接码。授权完成后自动同步。剩余约 " + Math.max(1, (pair.optLong("pairExpires") - System.currentTimeMillis()) / 60000) + " 分钟。");
             pairingStatus = label("等待手机授权…", 12, 0xFF9DB1B7);
             button("取消连接", () -> { pairing = false; handler.removeCallbacks(poll); work(() -> {
@@ -201,16 +259,16 @@ public final class MainActivity extends Activity {
         NotificationManager nm = getSystemService(NotificationManager.class);
         NotificationChannel channel = nm.getNotificationChannel(ReminderEngine.ALERTS);
         boolean notifications = nm.areNotificationsEnabled() && channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
-        detail("系统通知：" + (notifications ? "已开启" : "未开启") + "\n精确提醒：" + (ReminderEngine.exact(this) ? "可用" : "需授权，否则可能延迟"));
-        detail("以上是系统接口状态，不能保证厂商固件实际展示或唤醒。首次设置后，请关闭屏幕做一次测试。");
-        button("提前 " + store.minutes() + " 分钟 · 点击调整", () -> new AlertDialog.Builder(this).setTitle("提前提醒")
+        detail("通知权限 · " + (notifications ? "已开启" : "未开启") + "\n精确闹钟权限 · " + (ReminderEngine.exact(this) ? "已开启" : "未开启"));
+        detail("请先测试息屏提醒，确认本机能正常收到。");
+        button("提前提醒 · " + store.minutes() + " 分钟", () -> new AlertDialog.Builder(this).setTitle("提前提醒")
             .setItems(new String[]{"准点", "5 分钟", "10 分钟", "15 分钟"}, (dialog, which) -> work(() -> {
                 store.prefs.edit().putInt("minutes", new int[]{0, 5, 10, 15}[which]).commit(); ReminderEngine.reconcile(this, false);
             }, this::settings)).show());
+        button("15 秒测试提醒", this::testReminder);
         button("常驻摘要：" + (store.summary() ? "开" : "关"), () -> work(() -> {
             store.prefs.edit().putBoolean("summary", !store.summary()).commit(); ReminderEngine.reconcile(this, false);
         }, this::settings));
-        button("15 秒测试提醒", this::testReminder);
         button("系统通知设置", () -> {
             requestNotifications(); launch(new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()).putExtra(Settings.EXTRA_CHANNEL_ID, ReminderEngine.ALERTS));
         });
@@ -229,12 +287,56 @@ public final class MainActivity extends Activity {
     private void agenda() {
         base("未来日程"); long now = System.currentTimeMillis();
         if (now >= store.validUntil()) detail("缓存已过期，以下内容可能已有变化");
+        String previousDay = ""; int count = 0;
         for (Event event : store.events()) {
             if (!event.allDay && event.endMs <= now) continue;
-            label(event.allDay ? event.startDate + " · 全天" : new SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(new Date(event.startMs)), 13, 0xFFB9F68B);
-            label(event.title, 17, Color.WHITE); if (!event.location.isEmpty()) detail(event.location);
+            String day = event.allDay ? event.startDate : dateLabel(event.startMs);
+            if (!day.equals(previousDay)) { TextView date = label(day, 10, MUTED); date.setPadding(dp(4), dp(8), 0, dp(5)); previousDay = day; }
+            LinearLayout box = card();
+            cardText(box, event.allDay ? "全天" : new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(event.startMs)) + " – " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(event.endMs)), 12, ACCENT, 1);
+            cardText(box, event.title, 12, INK, 2);
+            box.setOnClickListener(v -> eventDetails(event, this::agenda));
+            box.setContentDescription("查看日程详情：" + event.title); count++;
         }
+        if (count == 0) detail("未来七天暂无日程");
         button("返回", this::render);
+    }
+    private void eventDetails(Event event, Runnable back) {
+        base("日程详情");
+        detail(event.allDay ? event.startDate + " · 全天" : dateLabel(event.startMs));
+        if (!event.allDay) label(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(event.startMs)) + " – " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(event.endMs)), 17, ACCENT);
+        label(event.title, 14, INK);
+        if (!event.location.isEmpty()) { detail("地点"); label(event.location, 11, INK); }
+        TextView people = label("参会人\n正在读取…", 10, MUTED); people.setLineSpacing(dp(3), 1);
+        if (store.direct()) {
+            JSONObject cached = attendeeCache.get(event.id);
+            if (cached != null && System.currentTimeMillis() - cached.optLong("cachedAt") < 300_000) people.setText(attendeeText(cached));
+            else {
+                LinearLayout detailScreen = content;
+                SyncJob.WORK.execute(() -> {
+                    String message;
+                    try {
+                        JSONObject result = store.directClient().attendees(event.attendeeEventId); result.put("cachedAt", System.currentTimeMillis());
+                        message = attendeeText(result);
+                        handler.post(() -> attendeeCache.put(event.id, result));
+                    } catch (Exception e) { message = "参会人\n" + (e instanceof java.io.IOException ? e.getMessage() : "暂时无法读取，请稍后重试"); }
+                    final String value = message;
+                    handler.post(() -> { if (active && content == detailScreen) people.setText(value); });
+                });
+            }
+        } else people.setText("参会人\n直连飞书后可查看");
+        button("返回", back);
+    }
+    private String attendeeText(JSONObject result) {
+        JSONArray names = result.optJSONArray("names"); StringBuilder text = new StringBuilder("参会人");
+        if (names == null || names.length() == 0) text.append("\n未返回可见名单");
+        else for (int i = 0; i < Math.min(10, names.length()); i++) text.append('\n').append(names.optString(i));
+        if (result.optBoolean("hasMore")) text.append("\n仅显示前 10 位");
+        if (result.optBoolean("partial")) text.append("\n部分群成员名单不可见");
+        return text.toString();
+    }
+    @Override public void onBackPressed() {
+        if (store.connected() && !"接下来".equals(screenTitle)) render(); else super.onBackPressed();
     }
     private void demo() throws Exception {
         long now = System.currentTimeMillis();

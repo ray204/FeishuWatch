@@ -2,9 +2,9 @@
 
 ## 范围
 
-用户已选择“先交付本地项目和部署包”。真实飞书授权、服务器部署和 OPPO Watch 3 真机验收不在本次已完成验证中；分别跟踪于 [Issue 1](https://github.com/ray204/FeishuWatch/issues/1)、[Issue 2](https://github.com/ray204/FeishuWatch/issues/2)、[Issue 3](https://github.com/ray204/FeishuWatch/issues/3)。
+初版按“先交付本地项目和部署包”验收；下方 v0.2 记录包含后续个人直连与真机测试。原服务模式未部署，OPPO 提醒与组件尚未通过验收，跟踪于 [Issue 1](https://github.com/ray204/FeishuWatch/issues/1)、[Issue 2](https://github.com/ray204/FeishuWatch/issues/2)、[Issue 3](https://github.com/ray204/FeishuWatch/issues/3)。
 
-测试数据均为虚构数据。没有读取真实日程，没有向已连接的物理手机安装应用。
+自动化测试数据均为虚构数据。后续个人直连经用户授权在手表读取真实日程，仅记录条数和脱敏状态；不提交日程内容、截图或令牌。没有向物理手机安装应用。
 
 ## 本地与 CI 检查
 
@@ -50,7 +50,7 @@
 - 本地 Java 单元测试：19 项（原提醒策略 6 项 + 直连协议 13 项），已解析 XML，无失败/错误/跳过。
 - 原服务端测试：14 项通过。直连模式不使用该服务，但保留旧模式回归。
 - 构建成功，lint 0 错误、20 条警告。Android 系统级测试新增两项凭证导入/加密/清除验证，最终结果以本版本 CI 为准。
-- 未取得真实应用凭证前，授权协议使用虚构响应验证；不声称真实飞书授权已成功。
+- 真实授权、主日历同步和 App 进程重启后的登录保留已通过，见下方实测记录；自动续期仍仅由自动化测试覆盖，尚未等待真实令牌到期。
 - 真机已有息屏提醒失败证据，见 DEVICE_TEST.md 与 Issue 1。该限制不由直连模式解决。
 
 | Requirement | Evidence |
@@ -71,6 +71,25 @@
 
 ### 真实授权定位结果
 
-2026-10-30 修订版真机响应：平铺格式，存在 access_token，expires_in=7200，但不存在 refresh_token。没有记录任何令牌值。浏览器只读核对发现三个用户权限均已开通、已发布，而「安全设置 → 刷新 user_access_token」开关关闭。用户正在开启并发布；在重新授权和日历同步通过前，不能标记真实连接完成。
+2026-10-30 初次真机成功响应为平铺格式，存在 access_token（7200 秒）但缺少 refresh_token。用户启用并发布「安全设置 → 刷新 user_access_token」后，再次扫码得到完整访问令牌与刷新令牌，主日历同步成功，共 9 条。强制结束并冷启动 App 后，授权状态保留，自动同步时间更新且仍为 9 条，无错误。未记录任何令牌或日程内容；自动续期尚未等待两小时后实测。
 
 本次并非 code/data 信封问题；信封支持仅是兼容性补充。实际代码缺陷是收到成功但缺失刷新令牌的响应后继续轮询已消费的设备码，导致原始原因被 invalid_grant 覆盖，已修复。
+
+
+## v0.2.1 手表界面调整
+
+按真机 466×466、density 320 的圆屏调整：页面标题 24sp → 13sp，日程标题 20/17sp → 13/12sp，辅助信息 13sp → 9–10sp。首页卡片区分日期、时间、标题与地点；标题最多两行并可点击查看全文。首屏只展示日程，操作区位于下一屏；日程列表按日期分组，操作区双列按钮 40dp，其余按钮 44dp 高。二维码缩为 132dp，首屏可完整展示。
+
+
+详情页按需读取参会人，10sp 小字、最多 10 人，标记组织者；群组展开并去重，隐藏会议室和已移除的参与人。名单只在内存缓存五分钟，不写入仓库或日志；权限不足提示名单不可见，不覆盖日程快照。普通重复实例使用所属系列的名单，单次修改的例外日程保持独立名单。接口依据：[参与人列表](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event-attendee/list)、[群成员列表](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event-attendee-chat_member/list)。
+
+真机检查：v0.2.1 覆盖安装保留登录和 9 条日程；首页无操作按钮，详情可阅读全文。首次周会实例名单接口返回 193001；区分普通实例与例外后，同一周会读取到 5 位参会人且无错误。真实姓名与日程截图仅在本地 Git 元数据目录留存，不随源码或安装包发布。
+
+| Requirement | Evidence |
+|---|---|
+| 参会人分页过滤与前 10 人上限 | `attendeesPaginateFilterResourcesAndShowFirstTenPeople` |
+| 群成员去重及部分名单不可见 | `attendeeGroupsDeduplicatePeopleAndPreserveVisibleNamesOnPartialAccess` |
+| 参会人读取自动续期及权限不足保留连接 | `attendeeReadRefreshesCredentialsAndPermissionDenialKeepsConnection` |
+| 授权失效不重放 | `attendeeRevokedTokenRequiresReauthorizationWithoutReplayingRefresh` |
+| 普通重复实例与例外使用各自名单 | `ordinaryOccurrencesUseSeriesAttendeesButExceptionsKeepTheirOwnList` |
+| 首屏不显示操作按钮，下滑可操作 | `dashboardActionsStayBelowFirstScreenAndRemainReachableByScrolling`（等待本提交 CI 执行） |

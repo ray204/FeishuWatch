@@ -8,6 +8,74 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.Assert.*;
 
 public class FeishuDirectTest {
+    @Test public void ordinaryOccurrencesUseSeriesAttendeesButExceptionsKeepTheirOwnList() throws Exception {
+        String prefix = "11111111-2222-3333-4444-555555555555_";
+        JSONArray events = new JSONArray();
+        for (int i = 1; i <= 3; i++) {
+            JSONObject e = new JSONObject().put("event_id", prefix + i).put("start_time", new JSONObject().put("timestamp", i * 1000))
+                .put("end_time", new JSONObject().put("timestamp", i * 1000 + 60));
+            if (i < 3) e.put("is_exception", i == 2);
+            events.put(e);
+        }
+        JSONArray result = FeishuDirect.normalize(events);
+        assertEquals(prefix + "0", result.getJSONObject(0).getString("attendeeEventId"));
+        assertEquals(prefix + "2", result.getJSONObject(1).getString("attendeeEventId"));
+        assertEquals(prefix + "3", result.getJSONObject(2).getString("attendeeEventId"));
+        assertEquals(prefix + "1", result.getJSONObject(0).getString("id"));
+        assertEquals(1000_000, result.getJSONObject(0).getLong("startMs"));
+    }
+    void primaryReply() throws Exception {
+        wire.add(200, "{\"data\":{\"calendars\":[{\"calendar\":{\"calendar_id\":\"primary/id\"}}]}}");
+    }
+    JSONObject person(int i) throws Exception { return new JSONObject().put("type", "user").put("user_id", "fixture-" + i).put("display_name", "示例参会人" + i); }
+    void peopleReply(JSONArray items, boolean more, String token) throws Exception {
+        wire.add(200, new JSONObject().put("data", new JSONObject().put("items", items).put("has_more", more).put("page_token", token)).toString());
+    }
+    @Test public void attendeesPaginateFilterResourcesAndShowFirstTenPeople() throws Exception {
+        authorized(false); primaryReply();
+        JSONArray first = new JSONArray().put(new JSONObject().put("type", "resource").put("display_name", "示例会议室"))
+            .put(person(99).put("rsvp_status", "removed"));
+        for (int i = 0; i < 8; i++) first.put(person(i));
+        peopleReply(first, true, "page/2");
+        peopleReply(new JSONArray().put(person(8)).put(person(9)).put(person(10)).put(person(11)), false, "");
+        JSONObject result = client.attendees("event/id_123"); JSONArray names = result.getJSONArray("names");
+        assertEquals(10, names.length()); assertEquals("示例参会人0", names.getString(0)); assertEquals("示例参会人9", names.getString(9));
+        assertTrue(result.getBoolean("hasMore")); assertFalse(result.getBoolean("partial"));
+        assertTrue(wire.urls.get(1).contains("primary%2Fid/events/event%2Fid_123/attendees?"));
+        assertTrue(wire.urls.get(2).contains("page_token=page%2F2"));
+        assertEquals("Bearer old-access", wire.headers.get(1).get("Authorization"));
+    }
+    @Test public void attendeeGroupsDeduplicatePeopleAndPreserveVisibleNamesOnPartialAccess() throws Exception {
+        authorized(false); primaryReply();
+        peopleReply(new JSONArray().put(person(1).put("is_organizer", true))
+            .put(new JSONObject().put("type", "chat").put("attendee_id", "group/one"))
+            .put(new JSONObject().put("type", "chat").put("attendee_id", "group/two")), false, "");
+        JSONObject member1 = person(1), member2 = person(2);
+        member1.put("open_id", member1.remove("user_id")); member2.put("open_id", member2.remove("user_id"));
+        peopleReply(new JSONArray().put(member1).put(member2), false, "");
+        wire.add(403, "{\"code\":194001}");
+        JSONObject result = client.attendees("event");
+        assertEquals("[\"示例参会人1 · 组织者\",\"示例参会人2\"]", result.getJSONArray("names").toString());
+        assertTrue(result.getBoolean("partial")); assertFalse(result.getBoolean("hasMore"));
+        assertTrue(wire.urls.get(2).contains("/group%2Fone/chat_members?"));
+        assertFalse(state.read().optBoolean("reauthorize"));
+    }
+    @Test public void attendeeReadRefreshesCredentialsAndPermissionDenialKeepsConnection() throws Exception {
+        authorized(true); wire.add(200, tokens("new-access", "new-refresh")); primaryReply();
+        wire.add(403, "{\"code\":194001,\"msg\":\"private provider text\"}");
+        IOException failure = assertThrows(IOException.class, () -> client.attendees("event"));
+        assertEquals("此日程未开放参会人名单", failure.getMessage());
+        assertEquals("Bearer new-access", wire.headers.get(2).get("Authorization"));
+        assertEquals("new-refresh", state.read().getString("refreshToken")); assertFalse(state.read().getBoolean("reauthorize"));
+        primaryReply(); peopleReply(new JSONArray(), false, "");
+        assertEquals(0, client.attendees("empty").getJSONArray("names").length());
+    }
+    @Test public void attendeeRevokedTokenRequiresReauthorizationWithoutReplayingRefresh() throws Exception {
+        authorized(false); primaryReply(); wire.add(401, "{}");
+        assertThrows(FeishuDirect.Reauthorize.class, () -> client.attendees("event"));
+        assertTrue(state.read().getBoolean("reauthorize")); int requests = wire.urls.size();
+        assertThrows(FeishuDirect.Reauthorize.class, () -> client.attendees("event")); assertEquals(requests, wire.urls.size());
+    }
     static final class Memory implements FeishuDirect.State {
         String value = "{}";
         public JSONObject read() throws Exception { return new JSONObject(value); }
