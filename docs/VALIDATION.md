@@ -68,3 +68,9 @@
 - 直连模式首轮 CI 通过：[41060200799](https://github.com/ray204/FeishuWatch/actions/runs/41060200799)，已解析 7 项 Android 系统测试，0 失败/错误/跳过。
 - 后续实测发现设备码被消费后仍重试会掩盖原始令牌解析错误，已增加成功响应信封兼容与停止重放：`wrappedOAuthSuccessIsAcceptedForLoginAndTokenRefresh`、`unsafeVerificationAddressAndIncompleteTokensAreRejected`。
 - 错误诊断脱敏：`authorizationDiagnosticsRedactAppSecretAndDeviceCode`。
+
+### 真实授权定位结果
+
+2026-10-30 修订版真机响应：平铺格式，存在 access_token，expires_in=7200，但不存在 refresh_token。没有记录任何令牌值。浏览器只读核对发现三个用户权限均已开通、已发布，而「安全设置 → 刷新 user_access_token」开关关闭。用户正在开启并发布；在重新授权和日历同步通过前，不能标记真实连接完成。
+
+本次并非 code/data 信封问题；信封支持仅是兼容性补充。实际代码缺陷是收到成功但缺失刷新令牌的响应后继续轮询已消费的设备码，导致原始原因被 invalid_grant 覆盖，已修复。

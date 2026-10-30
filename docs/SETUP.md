@@ -5,6 +5,7 @@
 无需部署服务器、域名或内网穿透。你自己的 App ID / App Secret 仅在首次配置时传入手表，不写入 APK、Git 或聊天。凭证由 Android Keystore AES-GCM 加密保存，但设备或应用运行环境被攻破仍有泄露风险。
 
 1. 在飞书自建应用中开通**用户身份**的 `calendar:calendar:read`、`calendar:calendar.event:read`，以及 `offline_access`。完成后台要求的审批与发布，应用可用范围包含自己。
+   在「安全设置」中，若存在「刷新 user_access_token」开关，需开启并发布新版本。仅开通 offline_access 并不保证该开关也已开启；关闭时可能登录成功但没有 refresh_token。
 2. 在本地 `server/.env` 填写 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`。直连模式忽略该文件中的其他服务器字段。也可使用独立本地文件，通过 `--env` 指定。
 3. 安装 debug APK 并完成手表 USB 调试授权，运行以下命令。也可在手表「配置自建应用」手动填写。
 
