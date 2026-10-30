@@ -14,7 +14,7 @@
 - APK：包名 `io.github.ray204.feishuwatch`，版本 `0.1.0`，minSdk 26、targetSdk 35；`apksigner verify --verbose` 通过，使用 v2 签名。
 - GitHub Actions 的 Docker 镜像构建和 `/healthz` 启动检查通过。本机未启动 Docker daemon，容器检查在 CI 完成。
 - 本地与 CI 应用 DEX 的反汇编内容一致（APK 签名、构建元数据可能不同）。
-- Android 11 模拟器：5 项通过，0 失败、0 错误、0 跳过，已解析运行产出的 JUnit XML。[完整 CI 运行](https://github.com/ray204/FeishuWatch/actions/runs/41054808817)（验证源码提交 `0cde6c5`）。
+- Android 11 模拟器：5 项通过，0 失败、0 错误、0 跳过，已解析运行产出的 JUnit XML。完整 CI 运行（迁移前 CI，原始日志保留于私有备份）（验证源码提交 `49ef30b`）。
 
 ## Requirement | Evidence
 
@@ -65,7 +65,7 @@
 | 本机密钥加密、临时文件删除及断开清除 | `directCredentialsAreEncryptedImportedOnceAndClearedOnDisconnect`（Android 系统测试） |
 | 错误配置不能覆盖既有凭证 | `malformedImportIsDeletedWithoutReplacingExistingCredentials`（Android 系统测试） |
 
-- 直连模式首轮 CI 通过：[41060200799](https://github.com/ray204/FeishuWatch/actions/runs/41060200799)，已解析 7 项 Android 系统测试，0 失败/错误/跳过。
+- 直连模式首轮 CI 通过：41060200799（迁移前 CI，原始日志保留于私有备份），已解析 7 项 Android 系统测试，0 失败/错误/跳过。
 - 后续实测发现设备码被消费后仍重试会掩盖原始令牌解析错误，已增加成功响应信封兼容与停止重放：`wrappedOAuthSuccessIsAcceptedForLoginAndTokenRefresh`、`unsafeVerificationAddressAndIncompleteTokensAreRejected`。
 - 错误诊断脱敏：`authorizationDiagnosticsRedactAppSecretAndDeviceCode`。
 
@@ -100,4 +100,4 @@ v0.2.1 新增「日程提醒」总开关，默认关闭（仅查看）。关闭�
 - 验证用例：`viewOnlyModeClearsNotificationsAndKeepsCalendarAndCredentials`（默认关闭、清除通知、旧提醒不再触发、日程与凭证保留）。
 
 
-v0.2.1 完整检查：本地 JVM 24 项、旧模式服务回归 14 项通过；构建成功，lint 0 错误、21 条警告。API30 模拟器 9 项通过（0 失败、错误或跳过），包含首屏操作区和仅查看模式验证，报告 XML 已解析：[CI 41066560799](https://github.com/ray204/FeishuWatch/actions/runs/41066560799)。此前两次运行的稍后提醒测试在等待系统完成回调时超时；后续将等待条件改为真实持久化结果，保留五分钟时间范围与通知清除断言，最终修订提交 `19c31d9` 的 [CI 41067074195](https://github.com/ray204/FeishuWatch/actions/runs/41067074195) 全部通过，API30 的 9 项结果 XML 再次确认无失败、错误或跳过。合计 47 项自动化测试通过。
+v0.2.1 完整检查：本地 JVM 24 项、旧模式服务回归 14 项通过；构建成功，lint 0 错误、21 条警告。API30 模拟器 9 项通过（0 失败、错误或跳过），包含首屏操作区和仅查看模式验证，报告 XML 已解析：CI 41066560799（迁移前 CI，原始日志保留于私有备份）。此前两次运行的稍后提醒测试在等待系统完成回调时超时；后续将等待条件改为真实持久化结果，保留五分钟时间范围与通知清除断言，最终修订提交 `c71a9dd` 的 CI 41067074195（迁移前 CI，原始日志保留于私有备份） 全部通过，API30 的 9 项结果 XML 再次确认无失败、错误或跳过。合计 47 项自动化测试通过。

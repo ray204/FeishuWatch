@@ -81,7 +81,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。安装方式：`adb install 
 
 公开前检查范围与结果见 [安全审计记录](docs/SECURITY_REVIEW.md)。不要在 Issue、截图或提交中上传 `.env`、应用密钥、用户令牌或真实日程。
 
-构建后运行 `bash scripts/package.sh`，在 `dist/` 得到 APK、源码 ZIP、部署 tar.gz 和 SHA256SUMS。发布包见 [Releases](https://github.com/ray204/FeishuWatch/releases)。
+构建后运行 `bash scripts/package.sh`，在 `dist/` 得到 APK、源码 ZIP、部署 tar.gz、ZXing Core 对应源码和 SHA256SUMS。首次打包需要联网下载固定版本的 ZXing 源码，并校验 SHA-256。发布包见 [Releases](https://github.com/ray204/FeishuWatch/releases)。
 
 ## 开源协议
 

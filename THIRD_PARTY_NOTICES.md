@@ -12,6 +12,8 @@ own licenses. Their presence does not relicense the upstream projects.
   [NOTICE](docs/licenses/ZXing-NOTICE.txt).
 - Source: https://github.com/zxing/zxing/tree/zxing-3.5.3/core
 - Dependency: `com.google.zxing:core:3.5.3` (unmodified).
+- Release downloads include `ZXing-core-3.5.3-sources.jar` from Maven Central
+  alongside the application source archive. Its checksum is in `SHA256SUMS`.
 
 ## Gradle Wrapper 8.9
 
