@@ -59,7 +59,9 @@ public final class MainActivity extends Activity {
     }
     private TextView text(String value, int size, int color) {
         TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color);
-        view.setIncludeFontPadding(false); view.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE); return view;
+        view.setIncludeFontPadding(false);
+        if (Build.VERSION.SDK_INT >= 29) view.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE);
+        return view;
     }
     private void limit(TextView view, int lines) { view.setMaxLines(lines); view.setEllipsize(TextUtils.TruncateAt.END); }
     private GradientDrawable surface(int color, int radius) {

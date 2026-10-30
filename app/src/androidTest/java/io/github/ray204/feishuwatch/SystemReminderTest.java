@@ -65,10 +65,11 @@ public class SystemReminderTest {
         assertTrue(store.delivered().contains("instrumented-fixture@" + start + ":10"));
         assertEquals(1, notification.getNotification().actions.length);
         long beforeAction = System.currentTimeMillis();
-        java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(1);
-        notification.getNotification().actions[0].actionIntent.send(context, 0, null,
-            (pending, intent, code, data, extras) -> finished.countDown(), new android.os.Handler(android.os.Looper.getMainLooper()));
-        assertTrue("System must finish delivering the snooze broadcast", finished.await(20, java.util.concurrent.TimeUnit.SECONDS));
+        notification.getNotification().actions[0].actionIntent.send();
+        // OnFinished is not the user-visible outcome. Wait for the receiver's
+        // persisted result, then check the full time window and notification.
+        long deadline = SystemClock.elapsedRealtime() + 20_000;
+        while (!store.snoozes().containsKey("instrumented-fixture@" + start) && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(50);
         Long snoozed = store.snoozes().get("instrumented-fixture@" + start);
         assertNotNull(snoozed);
         assertTrue(snoozed >= beforeAction + 300000);
