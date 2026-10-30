@@ -20,12 +20,12 @@ public final class SyncJob extends JobService {
         LocalStore store = new LocalStore(context);
         if (!store.connected()) return;
         try {
-            org.json.JSONObject snapshot = Bridge.request(store, "GET", "/v1/agenda", store.secret("deviceToken"));
+            org.json.JSONObject snapshot = store.direct() ? store.directClient().agenda() : Bridge.request(store, "GET", "/v1/agenda", store.secret("deviceToken"));
             synchronized (ReminderEngine.class) { store.snapshot(snapshot); }
         }
         catch (Exception e) {
             synchronized (ReminderEngine.class) {
-                if (e instanceof Bridge.AuthorizationExpired) store.prefs.edit().putLong("validUntil", 0).commit();
+                if (e instanceof Bridge.AuthorizationExpired || e instanceof FeishuDirect.Reauthorize) store.prefs.edit().putLong("validUntil", 0).commit();
                 store.error(e instanceof java.io.IOException ? e.getMessage() : "同步失败，请检查服务或重新连接");
             }
         }

@@ -2,9 +2,9 @@
 
 为 OPPO Watch 显示飞书日程，并通过系统通知和震动提醒赴约。目标设备：**OPPO Watch 3 / Android 11 / ColorOS Watch V16.0.0**。
 
-日常无需打开 App。首次用手机扫码授权，随后服务端自动续期；授权撤销或凭证失效时需要重新扫码。支持个人自建飞书应用。
+v0.2 默认采用个人直连：首次配置自己的 App ID / App Secret，用手机扫码授权，随后手表直接访问飞书并自动续期。无需自建服务器、域名或内网穿透。凭证运行时配置并使用 Android Keystore 加密，不写入 APK。旧版服务模式保留兼容。
 
-> 开发版。Android 标准能力已经实现，**OPPO 真机的通知呈现、息屏震动、后台策略和桌面组件尚待验证**。标准 AppWidget 不等于 OPPO 原生卡片，应用也不依赖 Wear OS。
+> 开发版。已在连接的 OPPO OWW261 / Android 11 上安装与操作。**当前固件平衡模式把本应用的唤醒闹钟降级为非唤醒，通知中心拒绝展示测试通知，息屏提醒尚未可用。** 标准 AppWidget 不等于 OPPO 原生卡片。详见真机记录。
 
 ## 功能
 
@@ -12,7 +12,7 @@
 - 可关闭的下一场常驻摘要；桌面支持时添加标准下一场日程小组件。
 - 7 天日程缓存，24 小时有效；有效缓存中的提醒不依赖网络或 App 页面。
 - 同步取消/拒绝/移除的日程后清除旧提醒；改期重排；重启和时区变化后恢复。
-- 扫码绑定、服务端加密保存飞书凭证、手表 Keystore 保存设备凭证。
+- 飞书设备授权扫码，无需回调服务器；手表 Keystore 加密保存个人应用密钥及用户令牌。
 - 一键 15 秒测试提醒。debug APK 另有明确标注的虚构日程体验模式。
 
 ## 项目结构
@@ -42,7 +42,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。安装方式：`adb install 
 ./gradlew assembleDebug -PserverUrl=https://watch.example.com
 ```
 
-后端配置见 [SETUP](docs/SETUP.md)。不将飞书 App Secret 打入 APK。测试不使用真实日程或真实用户凭证。
+个人直连首次配置见 [SETUP](docs/SETUP.md)。测试不使用真实日程或真实用户凭证。`server/` 和 `deploy/` 仅供可选的旧版服务模式使用。
 
 ## 当前边界
 

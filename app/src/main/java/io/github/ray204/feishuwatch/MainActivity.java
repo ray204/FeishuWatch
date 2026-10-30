@@ -23,6 +23,7 @@ public final class MainActivity extends Activity {
     private LocalStore store;
     private boolean active, busy, pairing;
     private String screenTitle = "";
+    private TextView pairingStatus;
     private final SharedPreferences.OnSharedPreferenceChangeListener changes = (preferences, key) -> {
         if (active && "接下来".equals(screenTitle) && ("events".equals(key) || "error".equals(key))) handler.post(this::render);
     };
@@ -30,6 +31,7 @@ public final class MainActivity extends Activity {
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); store = new LocalStore(this); ReminderEngine.channels(this);
+        try { store.importDirectConfig(this); } catch (Exception e) { Toast.makeText(this, "配置导入失败，请检查本地配置或先断开连接", Toast.LENGTH_LONG).show(); }
     }
     @Override protected void onResume() {
         super.onResume(); active = true; store.prefs.registerOnSharedPreferenceChangeListener(changes); render();
@@ -38,6 +40,7 @@ public final class MainActivity extends Activity {
     @Override protected void onPause() { super.onPause(); active = false; store.prefs.unregisterOnSharedPreferenceChangeListener(changes); handler.removeCallbacks(poll); }
     private void base(String title) {
         screenTitle = title;
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(0xFF0C1418);
         content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(24));
         scroll.addView(content); setContentView(scroll);
@@ -57,7 +60,7 @@ public final class MainActivity extends Activity {
     private void render() {
         if (!active) return;
         pairing = false;
-        if (!store.connected() && store.prefs.getLong("pairExpires", 0) > System.currentTimeMillis()) { showPair(); return; }
+        if (!store.connected() && pairData().optLong("pairExpires") > System.currentTimeMillis()) { showPair(); return; }
         if (!store.connected() && !store.prefs.getBoolean("demo", false)) { onboarding(); return; }
         base("接下来");
         long now = System.currentTimeMillis(); Event next = ReminderPolicy.upcoming(store.events(), now);
@@ -72,11 +75,51 @@ public final class MainActivity extends Activity {
         else if (now >= store.validUntil()) detail("缓存已过期 · 提醒已暂停");
         else detail("提前 " + store.minutes() + " 分钟提醒 · " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(store.syncedAt())) + " 已同步");
         if (!store.error().isEmpty()) detail(store.error());
+        if (store.direct() && pairData().optBoolean("reauthorize")) button("重新扫码授权", () -> work(() -> store.directClient().begin(), this::showPair));
         button("立即同步", () -> work(() -> SyncJob.sync(this), this::render));
         button("提醒与组件", this::settings);
         button("未来日程", this::agenda);
     }
+    private JSONObject pairData() {
+        try {
+            if (store.direct()) return store.directAuth();
+            return new JSONObject().put("pairExpires", store.prefs.getLong("pairExpires", 0))
+                .put("pairUrl", store.prefs.getString("pairUrl", "")).put("pairCode", store.prefs.getString("pairCode", ""));
+        } catch (Exception e) { return new JSONObject(); }
+    }
     private void onboarding() {
+        base("直接连接飞书"); detail("凭证保存在这块手表，无需服务器或域名。首次用手机扫码授权。");
+        if (store.direct()) {
+            detail("自建应用已配置");
+            button("扫码授权飞书", () -> work(() -> store.directClient().begin(), this::showPair));
+            button("清除应用凭证", () -> new AlertDialog.Builder(this).setMessage("删除此表保存的应用密钥和授权？")
+                .setNegativeButton("取消", null).setPositiveButton("删除", (dialog, which) -> work(() -> ReminderEngine.clear(this), this::onboarding)).show());
+        }
+        button(store.direct() ? "修改应用凭证" : "配置自建应用", this::credentials);
+        button("15 秒测试提醒", this::testReminder);
+        if (BuildConfig.DEBUG) button("体验示例日程", () -> work(this::demo, this::render));
+        button("旧版服务器连接", this::bridgeOnboarding);
+        detail("可以在电脑上通过 USB 配置 App ID 和 App Secret，免去手表输入。息屏提醒仍需通过真机测试。");
+    }
+    private EditText field(String hint, boolean secret) {
+        EditText input = new EditText(this); input.setSingleLine(true); input.setTextSize(12); input.setTextColor(Color.WHITE);
+        input.setHintTextColor(0xFF9DB1B7); input.setHint(hint); input.setSaveEnabled(false);
+        input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | (secret ? android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD : android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD));
+        content.addView(input); return input;
+    }
+    private void credentials() {
+        base("配置自建应用"); getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        detail("仅用于你自己的应用。密钥加密存储在手表，设备被攻破时仍可能泄露。");
+        EditText appId = field("App ID：cli_…", false), secret = field("App Secret", true);
+        appId.setText(pairData().optString("appId"));
+        button("保存应用配置", () -> {
+            String id = appId.getText().toString(), value = secret.getText().toString();
+            work(() -> store.directClient().configure(id, value), () -> { secret.setText(""); onboarding(); });
+        });
+        button("返回", this::onboarding);
+    }
+    private void bridgeOnboarding() {
         base("抬腕，准时赴约"); detail("会前震动提醒，无需每天打开。用手机扫码连接一次飞书。");
         EditText input = new EditText(this); input.setSingleLine(true); input.setTextSize(12); input.setTextColor(Color.WHITE);
         input.setHintTextColor(0xFF9DB1B7); input.setHint("https://你的服务域名"); input.setText(store.server());
@@ -85,6 +128,7 @@ public final class MainActivity extends Activity {
             final String value = input.getText().toString();
             work(() -> {
                 store.server(Bridge.validate(value));
+                store.prefs.edit().remove("directAuth").commit();
                 JSONObject result = Bridge.request(store, "POST", "/v1/pair", "");
                 store.secret("pollToken", result.getString("pollToken"));
                 store.prefs.edit().putString("pairUrl", result.getString("verificationUrl")).putString("pairCode", result.getString("pairingCode"))
@@ -99,36 +143,55 @@ public final class MainActivity extends Activity {
         if (!active) return;
         pairing = true; base("用手机扫码");
         try {
-            String url = store.prefs.getString("pairUrl", "");
+            JSONObject pair = pairData();
+            String url = pair.optString("pairUrl");
             int pixels = dp(160);
             BitMatrix matrix = new MultiFormatWriter().encode(url, BarcodeFormat.QR_CODE, pixels, pixels);
             Bitmap bitmap = Bitmap.createBitmap(pixels, pixels, Bitmap.Config.ARGB_8888);
             for (int y = 0; y < pixels; y++) for (int x = 0; x < pixels; x++) bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
             ImageView image = new ImageView(this); image.setImageBitmap(bitmap); image.setContentDescription("飞书连接二维码"); image.setAdjustViewBounds(true);
             content.addView(image, new LinearLayout.LayoutParams(-1, dp(160)));
-            label("连接码 " + store.prefs.getString("pairCode", ""), 17, 0xFFB9F68B);
-            detail("确认手机上的连接码一致。授权完成后自动同步，二维码 10 分钟有效。");
-            button("返回", () -> { pairing = false; handler.removeCallbacks(poll); store.prefs.edit().remove("pairExpires").remove("pollToken").commit(); onboarding(); });
+            label("连接码 " + pair.optString("pairCode"), 17, 0xFFB9F68B);
+            detail("用手机飞书扫码，核对连接码。授权完成后自动同步。剩余约 " + Math.max(1, (pair.optLong("pairExpires") - System.currentTimeMillis()) / 60000) + " 分钟。");
+            pairingStatus = label("等待手机授权…", 12, 0xFF9DB1B7);
+            button("取消连接", () -> { pairing = false; handler.removeCallbacks(poll); work(() -> {
+                if (store.direct()) store.directClient().cancelPair();
+                else store.prefs.edit().remove("pairExpires").remove("pollToken").commit();
+            }, this::onboarding); });
             handler.removeCallbacks(poll); handler.postDelayed(poll, 4000);
         } catch (Exception e) { detail("二维码生成失败，请重新连接"); }
     }
     private void pollPair() {
         if (!active || !pairing) return;
-        if (store.prefs.getLong("pairExpires", 0) <= System.currentTimeMillis()) { pairing = false; render(); return; }
+        if (pairData().optLong("pairExpires") <= System.currentTimeMillis()) { pairing = false; render(); return; }
         if (busy) { handler.postDelayed(poll, 4000); return; }
         busy = true;
         SyncJob.WORK.execute(() -> {
-            boolean connected = false;
+            boolean connected = false; String error = null;
             try {
+                if (store.direct()) {
+                    connected = store.directClient().poll();
+                    if (connected) { store.prefs.edit().putBoolean("demo", false).commit(); SyncJob.schedule(this); SyncJob.sync(this); }
+                } else {
                 JSONObject result = Bridge.request(store, "POST", "/v1/pair/poll", store.secret("pollToken"));
                 if ("connected".equals(result.getString("status"))) {
                     store.secret("deviceToken", result.getString("deviceToken"));
                     store.prefs.edit().remove("pairExpires").remove("pollToken").remove("pairUrl").remove("pairCode").putBoolean("demo", false).commit();
                     SyncJob.schedule(this); SyncJob.sync(this); connected = true;
                 }
-            } catch (Exception e) { store.error("连接暂未完成，请检查网络或重新扫码"); }
-            final boolean done = connected;
-            handler.post(() -> { busy = false; if (!active) return; if (done) { pairing = false; requestNotifications(); render(); } else if (pairing) handler.postDelayed(poll, 4000); });
+                }
+            } catch (Exception e) { error = e instanceof java.io.IOException ? e.getMessage() : "连接暂未完成，请检查应用配置或重新扫码"; }
+            final boolean done = connected; final String message = error;
+            handler.post(() -> {
+                busy = false; if (!active) return;
+                if (done) { pairing = false; requestNotifications(); render(); }
+                else if (pairing) {
+                    if (message != null && pairingStatus != null) pairingStatus.setText(message);
+                    if (pairData().optLong("pairExpires") <= System.currentTimeMillis()) {
+                        pairing = false; button("重新连接", this::onboarding);
+                    } else handler.postDelayed(poll, Math.max(1000, store.direct() ? pairData().optLong("nextPoll") - System.currentTimeMillis() : 4000));
+                }
+            });
         });
     }
     private void settings() {
@@ -137,7 +200,7 @@ public final class MainActivity extends Activity {
         NotificationChannel channel = nm.getNotificationChannel(ReminderEngine.ALERTS);
         boolean notifications = nm.areNotificationsEnabled() && channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
         detail("系统通知：" + (notifications ? "已开启" : "未开启") + "\n精确提醒：" + (ReminderEngine.exact(this) ? "可用" : "需授权，否则可能延迟"));
-        detail("系统勿扰与省电策略可能影响提醒。首次设置后，请关闭屏幕做一次测试。");
+        detail("以上是系统接口状态，不能保证厂商固件实际展示或唤醒。首次设置后，请关闭屏幕做一次测试。");
         button("提前 " + store.minutes() + " 分钟 · 点击调整", () -> new AlertDialog.Builder(this).setTitle("提前提醒")
             .setItems(new String[]{"准点", "5 分钟", "10 分钟", "15 分钟"}, (dialog, which) -> work(() -> {
                 store.prefs.edit().putInt("minutes", new int[]{0, 5, 10, 15}[which]).commit(); ReminderEngine.reconcile(this, false);
@@ -155,8 +218,8 @@ public final class MainActivity extends Activity {
         if (widgets.isRequestPinAppWidgetSupported()) button("添加下一场组件", () -> widgets.requestPinAppWidget(new ComponentName(this, AgendaWidget.class), null, null));
         else detail("当前桌面未提供标准组件添加入口；可先使用通知中心摘要。OPPO 原生卡片需独立适配。");
         button(store.connected() ? "断开飞书连接" : "退出示例", () -> new AlertDialog.Builder(this).setTitle("断开连接？")
-            .setMessage("将清除日程与提醒。重新使用时可再次扫码。").setNegativeButton("取消", null).setPositiveButton("断开", (d, w) -> work(() -> {
-                if (store.connected()) Bridge.request(store, "DELETE", "/v1/device", store.secret("deviceToken"));
+            .setMessage("将清除此表的应用密钥、授权和日程。飞书端的授权可在飞书中撤销。").setNegativeButton("取消", null).setPositiveButton("断开", (d, w) -> work(() -> {
+                if (store.connected() && !store.direct()) Bridge.request(store, "DELETE", "/v1/device", store.secret("deviceToken"));
                 ReminderEngine.clear(this);
             }, this::render)).show());
         button("返回", this::render);
@@ -190,7 +253,7 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, "正在处理…", Toast.LENGTH_SHORT).show();
         SyncJob.WORK.execute(() -> {
             String error = null;
-            try { task.run(); } catch (Exception e) { error = e instanceof java.io.IOException ? e.getMessage() : "操作失败，请检查服务配置"; }
+            try { task.run(); } catch (Exception e) { error = e instanceof java.io.IOException ? e.getMessage() : "操作失败，请检查应用配置或重新连接"; }
             final String message = error;
             handler.post(() -> { busy = false; if (!active) return; if (message != null) new AlertDialog.Builder(this).setMessage(message).setPositiveButton("知道了", null).show(); else success.run(); });
         });

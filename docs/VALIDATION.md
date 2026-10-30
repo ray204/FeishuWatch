@@ -44,3 +44,23 @@
 模拟器验证 Android 标准系统服务，不验证 OPPO 厂商通知中心、息屏震动、轻智能模式或 OPPO 私有卡片。没有将标准 AppWidget 当作已适配的 OPPO 原生卡片。
 
 周期同步受系统调度限制；服务端另有 60 秒短缓存，手动刷新也可能返回最近一分钟的快照。离线期间无法得知临时改期或取消，24 小时有效期过后暂停缓存提醒。未实施跨设备蓝牙同步或原生系统日历写入。
+
+## v0.2 个人直连验证
+
+- 本地 Java 单元测试：17 项（原提醒策略 6 项 + 直连协议 11 项），已解析 XML，无失败/错误/跳过。
+- 原服务端测试：14 项通过。直连模式不使用该服务，但保留旧模式回归。
+- 构建成功，lint 0 错误、19 条警告。Android 系统级测试新增两项凭证导入/加密/清除验证，最终结果以本版本 CI 为准。
+- 未取得真实应用凭证前，授权协议使用虚构响应验证；不声称真实飞书授权已成功。
+- 真机已有息屏提醒失败证据，见 DEVICE_TEST.md 与 Issue 1。该限制不由直连模式解决。
+
+| Requirement | Evidence |
+|---|---|
+| 无自建回调服务器的设备授权 | `deviceAuthorizationPollsFeishuWithoutCallbackServer` |
+| 轮询限速、重建恢复与网络失败退避 | `slowDownSurvivesRecreationAndPreventsEarlyPoll`、`networkFailurePreservesPollThrottle` |
+| 取消、拒绝与过期不能继续消费设备码 | `cancelRemovesPendingAuthorizationButKeepsAppCredentials`、`deniedAndExpiredAuthorizationsCannotBePolledAgain` |
+| 拒绝未知授权域名与不完整令牌 | `unsafeVerificationAddressAndIncompleteTokensAreRejected` |
+| 续期轮换、重建恢复及不确定结果不重放 | `refreshRotatesTokensBeforeCalendarReadAndSurvivesRestart`、`ambiguousRefreshIsNotReplayedAfterRestart` |
+| 失效身份要求重授权；权限或数据错误保留凭证 | `revokedUserTokenRequiresReauthorizationWithoutLeakingProviderError`、`permissionFailureKeepsCredentialsAndMalformedCalendarIsRejected` |
+| 日程实例、全天日期及取消过滤 | `normalizationPreservesInstancesAllDayDatesAndFiltersRemovedEvents` |
+| 本机密钥加密、临时文件删除及断开清除 | `directCredentialsAreEncryptedImportedOnceAndClearedOnDisconnect`（Android 系统测试） |
+| 错误配置不能覆盖既有凭证 | `malformedImportIsDeletedWithoutReplacingExistingCredentials`（Android 系统测试） |

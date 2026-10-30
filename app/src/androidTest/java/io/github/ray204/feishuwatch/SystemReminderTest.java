@@ -77,6 +77,25 @@ public class SystemReminderTest {
         assertFalse(store.prefs.getString("deviceToken", "").contains("fixture-only-device-token"));
         assertEquals("fixture-only-device-token", new LocalStore(context).secret("deviceToken"));
     }
+    @Test public void directCredentialsAreEncryptedImportedOnceAndClearedOnDisconnect() throws Exception {
+        java.io.File file = new java.io.File(context.getFilesDir(), "direct-config.json");
+        java.nio.file.Files.write(file.toPath(), "{\"appId\":\"cli_fixture\",\"appSecret\":\"fixture-only-app-secret\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        store.importDirectConfig(context); assertFalse(file.exists()); assertTrue(store.direct()); assertFalse(store.connected());
+        String stored = store.prefs.getString("directAuth", "");
+        assertFalse(stored.contains("fixture-only-app-secret")); assertFalse(stored.contains("appSecret"));
+        assertEquals("fixture-only-app-secret", new LocalStore(context).directAuth().getString("appSecret"));
+        JSONObject auth = store.directAuth().put("accessToken", "fixture-access").put("refreshToken", "fixture-refresh");
+        store.secret("directAuth", auth.toString()); assertTrue(new LocalStore(context).connected());
+        assertFalse(store.prefs.getString("directAuth", "").contains("fixture-refresh"));
+        ReminderEngine.clear(context); assertFalse(store.direct()); assertFalse(store.connected()); assertEquals("",store.secret("directAuth"));
+    }
+    @Test public void malformedImportIsDeletedWithoutReplacingExistingCredentials() throws Exception {
+        store.directClient().configure("cli_fixture", "original-fixture-secret");
+        java.io.File file = new java.io.File(context.getFilesDir(), "direct-config.json");
+        java.nio.file.Files.write(file.toPath(), "{\"appId\":\"bad\",\"appSecret\":\"\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        try { store.importDirectConfig(context); fail("Invalid config must fail"); } catch (java.io.IOException expected) { }
+        assertFalse(file.exists()); assertEquals("original-fixture-secret",store.directAuth().getString("appSecret"));
+    }
     @Test public void watchSizedDashboardRendersWithFixtureData() throws Exception {
         store.snapshot(snapshot(System.currentTimeMillis() + 660000)); store.prefs.edit().putBoolean("demo", true).commit();
         Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
