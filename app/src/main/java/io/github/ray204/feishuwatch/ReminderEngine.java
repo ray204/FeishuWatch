@@ -44,6 +44,7 @@ public final class ReminderEngine {
             .setContentIntent(open(context)).setVisibility(Notification.VISIBILITY_PRIVATE).setLocalOnly(true);
     }
     static boolean notify(Context context, String tag, int id, Notification notification) {
+        if (!new LocalStore(context).remindersEnabled()) return false;
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (!manager.areNotificationsEnabled()) return false;
         NotificationChannel channel = manager.getNotificationChannel(notification.getChannelId());
@@ -54,6 +55,13 @@ public final class ReminderEngine {
     public static synchronized void reconcile(Context context, boolean deliver) {
         channels(context);
         LocalStore store = new LocalStore(context);
+        if (!store.remindersEnabled()) {
+            context.getSystemService(AlarmManager.class).cancel(action(context, "tick", ""));
+            context.getSystemService(AlarmManager.class).cancel(action(context, "test", ""));
+            context.getSystemService(NotificationManager.class).cancelAll();
+            store.snoozes(Collections.emptyMap());
+            AgendaWidget.update(context); return;
+        }
         long now = System.currentTimeMillis();
         List<Event> events = store.events();
         Set<String> delivered = store.delivered();
@@ -99,6 +107,7 @@ public final class ReminderEngine {
     }
     public static synchronized void snooze(Context context, String key) {
         LocalStore store = new LocalStore(context); long now = System.currentTimeMillis();
+        if (!store.remindersEnabled()) return;
         if (now >= store.validUntil()) return;
         for (Event event : store.events()) if (event.key().equals(key) && now + 5 * ReminderPolicy.MINUTE < event.endMs) {
             Map<String, Long> snoozes = store.snoozes(); snoozes.put(key, now + 5 * ReminderPolicy.MINUTE); store.snoozes(snoozes);
@@ -106,7 +115,7 @@ public final class ReminderEngine {
         }
         reconcile(context, false);
     }
-    public static void test(Context context) { channels(context); alarm(context, System.currentTimeMillis() + 15_000, action(context, "test", "")); }
+    public static void test(Context context) { if (!new LocalStore(context).remindersEnabled()) return; channels(context); alarm(context, System.currentTimeMillis() + 15_000, action(context, "test", "")); }
     static void showTest(Context context) {
         channels(context); notify(context, null, TEST_ID, builder(context, ALERTS).setContentTitle("测试提醒已到达")
             .setContentText("这是测试，不是真实日程").setAutoCancel(true).build());

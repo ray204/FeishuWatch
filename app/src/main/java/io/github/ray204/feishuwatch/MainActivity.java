@@ -34,6 +34,7 @@ public final class MainActivity extends Activity {
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); store = new LocalStore(this); ReminderEngine.channels(this);
+        if (!store.remindersEnabled()) ReminderEngine.reconcile(this, false);
         try { store.importDirectConfig(this); } catch (Exception e) { Toast.makeText(this, "配置导入失败，请检查本地配置或先断开连接", Toast.LENGTH_LONG).show(); }
     }
     @Override protected void onResume() {
@@ -134,7 +135,7 @@ public final class MainActivity extends Activity {
         content = page;
         if (store.syncedAt() == 0) detail("正在等待首次同步");
         else if (now >= store.validUntil()) detail("缓存已过期 · 提醒已暂停");
-        else { TextView status = label(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(store.syncedAt())) + " 已同步 · 提前 " + store.minutes() + " 分钟", 9, MUTED); status.setGravity(Gravity.CENTER); }
+        else { TextView status = label(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(store.syncedAt())) + " 已同步 · " + (store.remindersEnabled() ? "提前 " + store.minutes() + " 分钟" : "仅查看"), 9, MUTED); status.setGravity(Gravity.CENTER); }
         if (!store.error().isEmpty()) detail(store.error());
         if (store.direct() && pairData().optBoolean("reauthorize")) button("重新扫码授权", () -> work(() -> store.directClient().begin(), this::showPair));
         navigation();
@@ -244,7 +245,7 @@ public final class MainActivity extends Activity {
             final boolean done = connected; final String message = error;
             handler.post(() -> {
                 busy = false; if (!active) return;
-                if (done) { pairing = false; requestNotifications(); render(); }
+                if (done) { pairing = false; if (store.remindersEnabled()) requestNotifications(); render(); }
                 else if (pairing) {
                     if (message != null && pairingStatus != null) pairingStatus.setText(message);
                     if (pairData().optLong("pairExpires") <= System.currentTimeMillis()) {
@@ -256,6 +257,13 @@ public final class MainActivity extends Activity {
     }
     private void settings() {
         pairing = false; base("提醒与组件");
+        button("日程提醒 · " + (store.remindersEnabled() ? "已开启" : "已关闭"), () -> {
+            boolean enabled = !store.remindersEnabled();
+            work(() -> { store.prefs.edit().putBoolean("remindersEnabled", enabled).commit(); ReminderEngine.reconcile(this, false); },
+                () -> { if (enabled) requestNotifications(); settings(); });
+        });
+        if (!store.remindersEnabled()) detail("仅查看日程，不通知、不震动。\n日程仍会自动同步。");
+        if (store.remindersEnabled()) {
         NotificationManager nm = getSystemService(NotificationManager.class);
         NotificationChannel channel = nm.getNotificationChannel(ReminderEngine.ALERTS);
         boolean notifications = nm.areNotificationsEnabled() && channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
@@ -274,9 +282,10 @@ public final class MainActivity extends Activity {
         });
         if (Build.VERSION.SDK_INT >= 31 && !ReminderEngine.exact(this)) button("允许精确提醒", () -> launch(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + getPackageName()))));
         button("电池与后台设置", () -> launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
+        }
         AppWidgetManager widgets = AppWidgetManager.getInstance(this);
         if (widgets.isRequestPinAppWidgetSupported()) button("添加下一场组件", () -> widgets.requestPinAppWidget(new ComponentName(this, AgendaWidget.class), null, null));
-        else detail("当前桌面未提供标准组件添加入口；可先使用通知中心摘要。OPPO 原生卡片需独立适配。");
+        else detail("当前系统暂不支持添加标准组件。");
         button(store.connected() ? "断开飞书连接" : "退出示例", () -> new AlertDialog.Builder(this).setTitle("断开连接？")
             .setMessage("将清除此表的应用密钥、授权和日程。飞书端的授权可在飞书中撤销。").setNegativeButton("取消", null).setPositiveButton("断开", (d, w) -> work(() -> {
                 if (store.connected() && !store.direct()) Bridge.request(store, "DELETE", "/v1/device", store.secret("deviceToken"));
@@ -349,7 +358,10 @@ public final class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
     }
-    private void testReminder() { requestNotifications(); SyncJob.WORK.execute(() -> ReminderEngine.test(this)); Toast.makeText(this, "15 秒后测试，请关闭屏幕", Toast.LENGTH_LONG).show(); }
+    private void testReminder() {
+        if (!store.remindersEnabled()) { Toast.makeText(this, "请先在设置中开启日程提醒", Toast.LENGTH_SHORT).show(); return; }
+        requestNotifications(); SyncJob.WORK.execute(() -> ReminderEngine.test(this)); Toast.makeText(this, "15 秒后测试，请关闭屏幕", Toast.LENGTH_LONG).show();
+    }
     private void launch(Intent intent) { try { startActivity(intent); } catch (ActivityNotFoundException e) { Toast.makeText(this, "本机未提供此设置入口", Toast.LENGTH_LONG).show(); } }
     interface Task { void run() throws Exception; }
     private void work(Task task, Runnable success) {

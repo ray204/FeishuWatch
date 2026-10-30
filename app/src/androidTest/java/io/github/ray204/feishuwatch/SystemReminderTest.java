@@ -19,6 +19,7 @@ public class SystemReminderTest {
     @Before public void setup() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext(); store = new LocalStore(context);
         ReminderEngine.clear(context); ReminderEngine.channels(context);
+        store.prefs.edit().putBoolean("remindersEnabled", true).commit();
     }
     @After public void cleanup() { ReminderEngine.clear(context); }
     private JSONObject snapshot(long start) throws Exception {
@@ -36,6 +37,23 @@ public class SystemReminderTest {
         for (int i = 0; i < 80 && (value != null) != present; i++) { SystemClock.sleep(50); value = eventNotification(); }
         assertEquals("NotificationManager should finish the asynchronous update", present, value != null);
         return value;
+    }
+    @Test public void viewOnlyModeClearsNotificationsAndKeepsCalendarAndCredentials() throws Exception {
+        store.prefs.edit().remove("remindersEnabled").commit(); assertFalse(store.remindersEnabled());
+        long start = System.currentTimeMillis() + 60000;
+        store.snapshot(snapshot(start)); store.secret("deviceToken", "fixture-preserved-token");
+        store.prefs.edit().putBoolean("remindersEnabled", true).commit();
+        ReminderEngine.reconcile(context, true); assertNotNull(awaitEvent(true)); long syncedAt = store.syncedAt();
+        store.prefs.edit().putBoolean("remindersEnabled", false).commit(); ReminderEngine.reconcile(context, true);
+        assertNull(awaitEvent(false));
+        ReminderEngine.snooze(context, "instrumented-fixture@" + start);
+        ReminderEngine.showTest(context); ReminderEngine.reconcile(context, true);
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        for (int i = 0; i < 80 && manager.getActiveNotifications().length != 0; i++) SystemClock.sleep(50);
+        assertEquals(0, manager.getActiveNotifications().length); assertTrue(store.snoozes().isEmpty());
+        assertEquals(1, store.events().size()); assertEquals(syncedAt, store.syncedAt());
+        assertEquals("fixture-preserved-token", store.secret("deviceToken"));
+        assertFalse(new LocalStore(context).remindersEnabled());
     }
     @Test public void cachedReminderPostsWithoutActivityAndSnoozesThroughSystemAction() throws Exception {
         long start = System.currentTimeMillis() + 60000;

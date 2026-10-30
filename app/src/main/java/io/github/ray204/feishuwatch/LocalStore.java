@@ -16,6 +16,7 @@ public final class LocalStore {
     public String server() { return prefs.getString("server", BuildConfig.DEFAULT_SERVER_URL); }
     public void server(String value) { prefs.edit().putString("server", value).commit(); }
     public int minutes() { return prefs.getInt("minutes", 10); }
+    public boolean remindersEnabled() { return prefs.getBoolean("remindersEnabled", false); }
     public boolean summary() { return prefs.getBoolean("summary", true); }
     public String error() { return prefs.getString("error", ""); }
     public void error(String value) { prefs.edit().putString("error", value).commit(); }

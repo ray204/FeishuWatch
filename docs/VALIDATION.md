@@ -93,3 +93,8 @@
 | 授权失效不重放 | `attendeeRevokedTokenRequiresReauthorizationWithoutReplayingRefresh` |
 | 普通重复实例与例外使用各自名单 | `ordinaryOccurrencesUseSeriesAttendeesButExceptionsKeepTheirOwnList` |
 | 首屏不显示操作按钮，下滑可操作 | `dashboardActionsStayBelowFirstScreenAndRemainReachableByScrolling`（等待本提交 CI 执行） |
+
+
+v0.2.1 新增「日程提醒」总开关，默认关闭（仅查看）。关闭时取消应用的日程闹钟、测试闹钟、稍后提醒和常驻摘要，不清除授权、日程缓存或同步任务。真机升级后确认开关为关闭、9 条日程仍同步，AlarmManager 无本应用待触发闹钟。
+
+- 验证用例：`viewOnlyModeClearsNotificationsAndKeepsCalendarAndCredentials`（默认关闭、清除通知、旧提醒不再触发、日程与凭证保留）。
