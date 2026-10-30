@@ -32,7 +32,13 @@ public final class ReminderEngine {
             else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, intent);
         } catch (SecurityException e) { manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, intent); }
     }
-    public static String time(Event event) { return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(event.startMs)); }
+    public static String time(Event event) {
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        java.time.LocalDate date = java.time.Instant.ofEpochMilli(event.startMs).atZone(zone).toLocalDate();
+        java.time.LocalDate today = java.time.LocalDate.now(zone);
+        String day = date.equals(today) ? "今天 " : date.equals(today.plusDays(1)) ? "明天 " : new SimpleDateFormat("MM/dd ", Locale.getDefault()).format(new Date(event.startMs));
+        return day + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(event.startMs));
+    }
     private static Notification.Builder builder(Context context, String channel) {
         return new Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_calendar).setColor(0xFFB9F68B)
             .setContentIntent(open(context)).setVisibility(Notification.VISIBILITY_PRIVATE).setLocalOnly(true);

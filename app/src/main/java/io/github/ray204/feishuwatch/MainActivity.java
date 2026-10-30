@@ -22,17 +22,22 @@ public final class MainActivity extends Activity {
     private LinearLayout content;
     private LocalStore store;
     private boolean active, busy, pairing;
+    private String screenTitle = "";
+    private final SharedPreferences.OnSharedPreferenceChangeListener changes = (preferences, key) -> {
+        if (active && "接下来".equals(screenTitle) && ("events".equals(key) || "error".equals(key))) handler.post(this::render);
+    };
     private final Runnable poll = this::pollPair;
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); store = new LocalStore(this); ReminderEngine.channels(this);
     }
     @Override protected void onResume() {
-        super.onResume(); active = true; render();
+        super.onResume(); active = true; store.prefs.registerOnSharedPreferenceChangeListener(changes); render();
         if (store.connected()) { SyncJob.schedule(this); SyncJob.refresh(this); }
     }
-    @Override protected void onPause() { super.onPause(); active = false; handler.removeCallbacks(poll); }
+    @Override protected void onPause() { super.onPause(); active = false; store.prefs.unregisterOnSharedPreferenceChangeListener(changes); handler.removeCallbacks(poll); }
     private void base(String title) {
+        screenTitle = title;
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(0xFF0C1418);
         content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(24));
         scroll.addView(content); setContentView(scroll);

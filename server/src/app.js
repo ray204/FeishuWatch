@@ -93,13 +93,16 @@ export function createApp({ store, client, publicUrl, now = Date.now }) {
       }
       const deviceKey = bearer && hash(bearer);
       if (path === '/v1/agenda' || path === '/v1/device') {
-        if (!deviceKey || !store.data.devices[deviceKey]) throw new ApiError(401, 'device_revoked');
-        if (path === '/v1/agenda' && req.method === 'GET') return send(200, await agenda.get(deviceKey));
+        if (!deviceKey) throw new ApiError(401, 'device_revoked');
         if (path === '/v1/device' && req.method === 'DELETE') {
+          // Idempotent even after server-side revocation or a lost DELETE response.
+          // The watch must be able to finish local cleanup and pair again.
           delete store.data.devices[deviceKey];
           for (const [id, pair] of Object.entries(store.data.pairs)) if (pair.deviceKey === deviceKey) delete store.data.pairs[id];
           store.save(); return send(200, { revoked: true });
         }
+        if (!store.data.devices[deviceKey]) throw new ApiError(401, 'device_revoked');
+        if (path === '/v1/agenda' && req.method === 'GET') return send(200, await agenda.get(deviceKey));
       }
       throw new ApiError(404, 'not_found');
     } catch (error) {

@@ -11,6 +11,18 @@ jobs:
         with:
           node-version: '22'
       - run: npm test --prefix server
+      - name: Build and smoke test deployment image
+        run: |
+          docker build -f deploy/Dockerfile -t feishu-watch:test .
+          docker run -d --name feishu-watch-test -p 127.0.0.1:8787:8787 \
+            -e PUBLIC_URL=https://example.test -e FEISHU_APP_ID=fixture \
+            -e FEISHU_APP_SECRET=fixture -e STORE_KEY="$(openssl rand -hex 32)" feishu-watch:test
+          trap 'docker rm -f feishu-watch-test' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:8787/healthz > /tmp/health.json; then break; fi
+            sleep 1
+          done
+          node -e 'const fs=require("fs"); if(JSON.parse(fs.readFileSync("/tmp/health.json")).ok!==true) process.exit(1)'
   android:
     runs-on: ubuntu-latest
     steps:

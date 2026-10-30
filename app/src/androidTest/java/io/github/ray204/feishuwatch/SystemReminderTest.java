@@ -31,11 +31,17 @@ public class SystemReminderTest {
         for (StatusBarNotification n : context.getSystemService(NotificationManager.class).getActiveNotifications()) if (n.getId() == 20) return n;
         return null;
     }
+    private StatusBarNotification awaitEvent(boolean present) {
+        StatusBarNotification value = eventNotification();
+        for (int i = 0; i < 80 && (value != null) != present; i++) { SystemClock.sleep(50); value = eventNotification(); }
+        assertEquals("NotificationManager should finish the asynchronous update", present, value != null);
+        return value;
+    }
     @Test public void cachedReminderPostsWithoutActivityAndSnoozesThroughSystemAction() throws Exception {
         long start = System.currentTimeMillis() + 60000;
         store.snapshot(snapshot(start)); store.prefs.edit().putBoolean("demo", true).commit();
         ReminderEngine.reconcile(context, true);
-        StatusBarNotification notification = eventNotification(); assertNotNull(notification);
+        StatusBarNotification notification = awaitEvent(true);
         assertEquals("集成测试日程", notification.getNotification().extras.getString(Notification.EXTRA_TITLE));
         assertEquals(ReminderEngine.ALERTS, notification.getNotification().getChannelId());
         assertTrue(store.delivered().contains("instrumented-fixture@" + start + ":10"));
@@ -44,15 +50,15 @@ public class SystemReminderTest {
         for (int i = 0; i < 40 && store.snoozes().isEmpty(); i++) SystemClock.sleep(50);
         Long snoozed = store.snoozes().get("instrumented-fixture@" + start);
         assertNotNull(snoozed); assertTrue(snoozed > System.currentTimeMillis() + 290000);
-        assertNull(eventNotification());
+        assertNull(awaitEvent(false));
         ReminderEngine.reconcile(context, true); assertNull(eventNotification());
     }
     @Test public void cancellationRemovesDeliveredNotificationAndSnapshotReplacementPersists() throws Exception {
         store.snapshot(snapshot(System.currentTimeMillis() + 60000)); store.prefs.edit().putBoolean("demo", true).commit();
-        ReminderEngine.reconcile(context, true); assertNotNull(eventNotification());
+        ReminderEngine.reconcile(context, true); assertNotNull(awaitEvent(true));
         JSONObject empty = snapshot(System.currentTimeMillis()).put("events", new JSONArray()); store.snapshot(empty);
         ReminderEngine.reconcile(context, true);
-        assertNull(eventNotification()); assertTrue(new LocalStore(context).events().isEmpty()); assertTrue(store.delivered().isEmpty());
+        assertNull(awaitEvent(false)); assertTrue(new LocalStore(context).events().isEmpty()); assertTrue(store.delivered().isEmpty());
     }
     @Test public void systemAlarmDeliversAfterActivityLeavesForeground() throws Exception {
         long start = System.currentTimeMillis() + 5000;

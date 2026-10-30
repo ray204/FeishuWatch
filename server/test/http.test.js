@@ -46,6 +46,7 @@ test('pairing_requires_browser_state_and_poll_secret_then_retries_safely', async
   assert.equal((await app.request('/v1/agenda')).status, 401);
   assert.deepEqual((await (await app.request('/v1/agenda', { headers: deviceHeaders })).json()).events, []);
   assert.equal((await app.request('/v1/device', { method: 'DELETE', headers: deviceHeaders })).status, 200);
+  assert.deepEqual(await (await app.request('/v1/device', { method: 'DELETE', headers: deviceHeaders })).json(), { revoked: true });
   assert.equal((await app.request('/v1/agenda', { headers: deviceHeaders })).status, 401);
   assert.equal((await app.request('/v1/pair/poll', { method: 'POST', headers })).status, 401);
 });

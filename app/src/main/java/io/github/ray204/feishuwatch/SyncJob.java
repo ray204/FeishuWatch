@@ -8,6 +8,7 @@ public final class SyncJob extends JobService {
     public static final ExecutorService WORK = Executors.newSingleThreadExecutor();
     public static void schedule(Context context) {
         JobScheduler jobs = context.getSystemService(JobScheduler.class);
+        if (jobs.getPendingJob(41) != null) return;
         jobs.schedule(new JobInfo.Builder(41, new ComponentName(context, SyncJob.class))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setPeriodic(15 * 60_000L).setPersisted(true).build());
     }
@@ -22,7 +23,12 @@ public final class SyncJob extends JobService {
             org.json.JSONObject snapshot = Bridge.request(store, "GET", "/v1/agenda", store.secret("deviceToken"));
             synchronized (ReminderEngine.class) { store.snapshot(snapshot); }
         }
-        catch (Exception e) { store.error(e instanceof java.io.IOException ? e.getMessage() : "同步失败，请检查服务或重新连接"); }
+        catch (Exception e) {
+            synchronized (ReminderEngine.class) {
+                if (e instanceof Bridge.AuthorizationExpired) store.prefs.edit().putLong("validUntil", 0).commit();
+                store.error(e instanceof java.io.IOException ? e.getMessage() : "同步失败，请检查服务或重新连接");
+            }
+        }
         ReminderEngine.reconcile(context, true);
     }
     @Override public boolean onStartJob(JobParameters params) {
