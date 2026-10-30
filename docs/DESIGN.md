@@ -13,7 +13,7 @@
 1. 安装后一次打开：填写服务地址（可通过构建参数预置）→生成二维码→用手机扫码→飞书授权→手表自动连通。手机无需安装配套 App。
 2. 首页给出下一场和最近同步状态；设置允许调整提前时间（0/5/10/15 分钟）、常驻摘要及测试提醒；显示权限和节电诊断。默认提前 10 分钟。
 3. 系统 AlarmManager 调度本地缓存的日程，在闹钟触发时由 BroadcastReceiver 发出高优先级通知，通知渠道控制震动；不依赖 App Activity 或网络。
-4. “稍后 5 分钟”是本地提醒，不修改飞书。到期/取消/拒绝/移除日程不再提醒，修改起始时间后替换旧提醒。相邻同一时刻日程成组通知。相隔过近的闹钟仍可能受 Android Doze 频控约束。
+4. “稍后 5 分钟”是本地提醒，不修改飞书。到期/取消/拒绝/移除日程不再提醒，修改起始时间后替换旧提醒。同一时刻日程由一次闹钟扫描并逐条通知。相隔过近的闹钟仍可能受 Android Doze 频控约束。
 5. 静音的常驻摘要显示当前/下一场，可一键刷新。摘要按缓存事件边界更新，同时重启、同步和小组件刷新时重算。
 6. 提供标准 AppWidget（下一场、时间、刷新按钮）。OPPO 桌面是否提供 AppWidgetHost 未确认，文档不声称其等价于 OPPO 原生卡片。没有接入 Wear OS Tiles/Complications：不能把 Wear OS 接口当作 ColorOS Watch 接口。
 7. 不用悬浮窗、隐藏 API、强制全屏或忽略勿扰的手段。系统通知受 OEM 策略影响，设置内提供独立延迟测试，实机不展示时需诊断渠道/固件或取得 OPPO 官方 SDK。原生日历桥接可作为后续方案，需要先核验 CalendarProvider 和系统日历消费者，首版不申请日历写入权限。
@@ -56,7 +56,7 @@ JobScheduler 每 15 分钟尝试同步，需要网络；这是最小间隔，不
 
 - 持久保存已投递的 `eventId + startMs + offset` 键，避免同步/重启重复通知。
 - 每次成功同步取消之前 PendingIntent，再根据新快照计算未来提醒；触发时再次读当前缓存验证实例及起始时间，防止取消/改期后旧 Intent 误报。
-- 同一触发时间共享一个 Alarm，接收器扫描所有到期事项。错过会前提醒但会议尚未开始，补发一次；已开始/结束的旧会议不进行历史补发。
+- 同一触发时间共享一个 Alarm，接收器扫描所有到期事项。错过会前提醒时补发一次；允许开始后 1 分钟内的调度抖动，之后不进行历史补发。
 - 精确闹钟可用则 `setExactAndAllowWhileIdle`；Android 12+ 没有精确闹钟授权时降级非精确并显示状态。Android 11 不要求此特殊授权。Android 13+ 提供通知权限申请。
 - 使用 NotificationChannel 的震动能力并尊重勿扰；不把后台周期同步当作提醒计时器。
 
@@ -88,3 +88,4 @@ GitHub：新建 ray204/FeishuWatch 私有仓库；main 保存初版、Actions �
 - [Android 通知](https://developer.android.com/develop/ui/compose/notifications/create-notification)：通知渠道、系统呈现。
 - [飞书主日历](https://open.feishu.cn/document/server-docs/calendar-v4/calendar/primary)、[日程视图](https://open.feishu.cn/document/calendar-v4/calendar-event/instance_view)、[刷新凭证](https://open.feishu.cn/document/authentication-management/access-token/refresh-user-access-token)。CLI schema 已核验主日历及实例视图字段。
 - 真机 ADB、飞书 App ID/Secret、HTTPS 域名和部署机器尚未提供。开发可使用模拟数据与本机后端完成；真实授权与手表效果需要这些外部条件。
+- 用户已确认本期先交付本地项目与部署包；真实部署和真机联调记录为 GitHub Issues 后续工作，不作为本期已验证能力。
