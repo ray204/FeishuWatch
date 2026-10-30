@@ -46,10 +46,15 @@ public class SystemReminderTest {
         assertEquals(ReminderEngine.ALERTS, notification.getNotification().getChannelId());
         assertTrue(store.delivered().contains("instrumented-fixture@" + start + ":10"));
         assertEquals(1, notification.getNotification().actions.length);
-        notification.getNotification().actions[0].actionIntent.send();
-        for (int i = 0; i < 40 && store.snoozes().isEmpty(); i++) SystemClock.sleep(50);
+        long beforeAction = System.currentTimeMillis();
+        java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(1);
+        notification.getNotification().actions[0].actionIntent.send(context, 0, null,
+            (pending, intent, code, data, extras) -> finished.countDown(), new android.os.Handler(android.os.Looper.getMainLooper()));
+        assertTrue("System must finish delivering the snooze broadcast", finished.await(20, java.util.concurrent.TimeUnit.SECONDS));
         Long snoozed = store.snoozes().get("instrumented-fixture@" + start);
-        assertNotNull(snoozed); assertTrue(snoozed > System.currentTimeMillis() + 290000);
+        assertNotNull(snoozed);
+        assertTrue(snoozed >= beforeAction + 300000);
+        assertTrue(snoozed <= System.currentTimeMillis() + 300000);
         assertNull(awaitEvent(false));
         ReminderEngine.reconcile(context, true); assertNull(eventNotification());
     }

@@ -65,11 +65,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: |
-            adb shell wm size 372x430
-            adb shell wm density 240
-            ./gradlew connectedDebugAndroidTest
-            adb pull /sdcard/Android/data/io.github.ray204.feishuwatch/files/screenshots app/build/watch-screenshots
+          script: bash scripts/emulator-check.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
