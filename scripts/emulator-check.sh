@@ -6,4 +6,6 @@ cd "$(dirname "$0")/.."
 trap 'adb pull /sdcard/Android/data/io.github.ray204.feishuwatch/files/screenshots app/build/watch-screenshots || true' EXIT
 adb shell wm size 372x430
 adb shell wm density 240
-./gradlew connectedDebugAndroidTest
+# Retain app data until the EXIT trap exports the screenshot. The emulator itself
+# is disposable; AGP's default uninstall otherwise removes external app files.
+./gradlew connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true

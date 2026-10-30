@@ -9,3 +9,4 @@ server/data/
 *.keystore
 *.jks
 node_modules/
+dist/
