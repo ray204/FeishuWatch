@@ -1,11 +1,13 @@
 # 配置、授权与安装
 
+首次使用建议先按 [README 的完整上手流程](../README.md#安装与首次连接) 操作，其中包含创建自建应用、用户身份权限、发布审批、USB 安装、凭证导入和日常使用。本页保留直连配置摘要及可选服务器模式的部署说明。
+
 ## v0.2 个人手表直连（默认）
 
 无需部署服务器、域名或内网穿透。你自己的 App ID / App Secret 仅在首次配置时传入手表，不写入 APK、Git 或聊天。凭证由 Android Keystore AES-GCM 加密保存，但设备或应用运行环境被攻破仍有泄露风险。
 
 1. 在飞书自建应用中开通**用户身份**的 `calendar:calendar:read`、`calendar:calendar.event:read`，以及 `offline_access`。完成后台要求的审批与发布，应用可用范围包含自己。
-   在「安全设置」中，若存在「刷新 user_access_token」开关，需开启并发布新版本。仅开通 offline_access 并不保证该开关也已开启；关闭时可能登录成功但没有 refresh_token。
+   在「安全设置」中，若存在「刷新 user_access_token」开关，需开启并发布新版本；官方文档说明未显示此开关时默认为开启。仅开通 offline_access 并不保证已有开关也已开启；关闭时可能登录成功但没有 refresh_token。参考 [飞书刷新凭证文档](https://open.feishu.cn/document/authentication-management/access-token/refresh-user-access-token)。
 2. 在本地 `server/.env` 填写 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`。直连模式忽略该文件中的其他服务器字段。也可使用独立本地文件，通过 `--env` 指定。
 3. 安装 debug APK 并完成手表 USB 调试授权，运行以下命令。也可在手表「配置自建应用」手动填写。
 
@@ -72,7 +74,7 @@ curl --fail https://watch.example.com/healthz
 
 Caddy 自动申请 HTTPS 证书。Node 不对宿主机公开端口。需要备份 `bridge_data` 卷和 STORE_KEY；二者必须配套。升级时不要 `down -v`。后端不具备跨进程锁，因此不要水平扩容。
 
-## 构建 APK
+## 构建 APK（两种模式通用）
 
 安装 JDK 17、Android SDK Platform 35 和 Build Tools 35（AGP 可能自动补充默认工具版本）。在 `local.properties` 设置本机 SDK 目录，该文件不会提交。
 
@@ -81,18 +83,20 @@ sdk.dir=/你的/Android/sdk
 ```
 
 ```bash
-./gradlew testDebugUnitTest assembleDebug lintDebug -PserverUrl=https://watch.example.com
+./gradlew testDebugUnitTest assembleDebug lintDebug
 ```
+
+只有使用旧版服务器模式、希望预填地址时，才追加 `-PserverUrl=https://watch.example.com`；个人直连无需该参数。
 
 本机开发用 debug APK；正式长期使用建议创建自己的 release 签名并妥善保存，不把签名文件与密码入库。debug 构建包含示例模式，release 不包含示例入口。
 
-## 手表连接
+## 手表连接（旧版服务器模式）
 
 1. 在手表开发者设置中开启设备提供的 ADB 调试方式，将电脑与手表连接；无线端口/配对流程以固件界面显示为准，不假定 5555。
 2. `adb devices` 确认设备后安装 APK。多设备时使用 `adb -s 序列号 install -r ...`。
 3. 打开“腕上日程”，点击连接，用手机扫描二维码，核对连接码，点击确认并授权飞书。
-4. 手机页面提示已连接后回到手表，手表会自动轮询、下载日程、安排提醒。
-5. 在“提醒与组件”中执行 15 秒测试，回到表盘并关闭屏幕，确认系统通知与震动。
+4. 手机页面提示已连接后回到手表，手表会自动轮询、下载日程。默认仅查看，只有开启日程提醒后才安排提醒。
+5. 若需要提醒，在“提醒与组件”中开启“日程提醒”后执行 15 秒测试，回到表盘并关闭屏幕，确认系统通知与震动。
 6. 正常使用不需重复登录或打开 App；每次授权需要 `offline_access`。服务重启依赖加密数据卷保持连接。
 
 ## 常见问题
@@ -100,7 +104,7 @@ sdk.dir=/你的/Android/sdk
 - **需要重新连接**：先断开旧连接，再扫码。授权被撤销、refresh token 失效或一次性刷新请求的响应丢失会需要重授权。
 - **通知未出现**：检查日程提醒渠道、勿扰、系统对 App 的后台限制，并完成真机测试。`areNotificationsEnabled()` 为 true 并不能证明 OPPO 固件一定显示。
 - **组件无法添加**：系统没有公开标准 AppWidgetHost 时，不显示添加按钮。此时仍可测试通知摘要；OPPO 原生卡片另行适配。
-- **二维码过期**：10 分钟内未完成授权，返回重新生成。
+- **二维码过期**：在手表显示的有效时间内完成授权，过期后返回重新生成。
 - **空日历**：确认授权的是本人且主日历有日程；订阅的其他日历暂不聚合。检查权限，不能用忙闲接口代替标题等详情。
 - **缓存过期**：检查网络和服务，手动刷新。缓存过期后保留列表供查看但不继续提醒。
 - **临时改期仍出现旧通知**：离线或周期同步被系统延迟时无法得知远端改动。成功同步后会撤销旧通知和提醒。
