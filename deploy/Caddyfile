@@ -1,0 +1,5 @@
+{$PUBLIC_HOST} {
+    reverse_proxy bridge:8787
+    header Strict-Transport-Security "max-age=31536000"
+    # Access logging is intentionally not enabled: OAuth callback URLs contain codes.
+}
